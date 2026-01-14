@@ -121,15 +121,17 @@ def compile_code():
                 str(worker_count),
                 str(executable)
             ]
+            run_timeout = 30  # MPI needs more time for process spawning
         else:
             env['OMP_NUM_THREADS'] = str(worker_count)
             run_cmd = [str(executable)]
-        
+            run_timeout = 10
+
         run_result = subprocess.run(
             run_cmd,
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=run_timeout,
             env=env
         )
         
@@ -149,10 +151,11 @@ def compile_code():
     except subprocess.TimeoutExpired:
         if 'job_dir' in locals():
             shutil.rmtree(job_dir, ignore_errors=True)
+        timeout_limit = locals().get('run_timeout', 10)
         return jsonify({
             'success': False,
             'error': 'Timeout',
-            'stderr': 'Program execution took too long (>5 seconds)'
+            'stderr': f'Program execution took too long (>{timeout_limit} seconds)'
         }), 408
         
     except Exception as e:
