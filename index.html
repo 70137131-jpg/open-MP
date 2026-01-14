@@ -55,8 +55,8 @@
         .main-content {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            min-height: 650px;
+            gap: 20px;
+            min-height: 70vh;
         }
 
         /* Neo-brutalist Cards */
@@ -67,6 +67,8 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            min-height: 0;
+            max-height: 80vh;
         }
 
         .editor-section {
@@ -208,18 +210,26 @@
 
         .editor-wrapper {
             flex: 1;
-            padding: 20px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
         }
 
         .CodeMirror {
-            height: 100% !important;
-            min-height: 450px;
+            flex: 1;
+            height: auto !important;
+            min-height: 300px;
+            max-height: 50vh;
             font-family: 'JetBrains Mono', monospace;
             font-size: 14px;
             border: 3px solid #000;
             box-shadow: 4px 4px 0 #000;
+        }
+
+        .CodeMirror-scroll {
+            min-height: 100%;
         }
 
         .CodeMirror-gutters {
@@ -228,23 +238,25 @@
 
         .output-wrapper {
             flex: 1;
-            padding: 20px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
+            min-height: 0;
         }
 
         .output-box {
             flex: 1;
             background: #1a1a2e;
             color: #eee;
-            padding: 24px;
+            padding: 20px;
             font-family: 'JetBrains Mono', monospace;
             font-size: 13px;
             overflow-y: auto;
-            min-height: 450px;
+            min-height: 200px;
+            max-height: 60vh;
             white-space: pre-wrap;
             word-wrap: break-word;
-            line-height: 1.7;
+            line-height: 1.6;
             border: 3px solid #000;
             box-shadow: 4px 4px 0 #000;
         }
@@ -259,17 +271,18 @@
 
         /* Examples section */
         .examples {
-            margin-top: 20px;
-            padding: 20px;
+            margin-top: 15px;
+            padding: 15px;
             background: #fff;
             border: 3px solid #000;
+            flex-shrink: 0;
         }
 
         .examples h3 {
-            font-size: 0.95rem;
+            font-size: 0.85rem;
             font-weight: 700;
             color: #000;
-            margin-bottom: 14px;
+            margin-bottom: 10px;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
@@ -405,28 +418,42 @@
         }
 
         /* Responsive design */
-        @media (max-width: 1024px) {
+        @media (max-width: 1200px) {
             .main-content {
                 grid-template-columns: 1fr;
+                min-height: auto;
             }
 
-            .container {
-                padding: 20px;
+            .glass-card {
+                max-height: none;
             }
 
-            header h1 {
-                font-size: 2rem;
+            .CodeMirror {
+                max-height: 40vh;
+                min-height: 250px;
+            }
+
+            .output-box {
+                max-height: 40vh;
+                min-height: 150px;
             }
         }
 
         @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
             .toolbar {
                 flex-direction: column;
                 align-items: stretch;
+                padding: 12px;
+                gap: 10px;
             }
 
             .controls {
                 justify-content: center;
+                gap: 8px;
             }
 
             .action-buttons {
@@ -437,42 +464,118 @@
             .btn {
                 flex: 1;
                 justify-content: center;
+                padding: 10px 16px;
             }
 
             header {
-                padding: 25px;
+                padding: 20px;
+                margin-bottom: 20px;
             }
 
             header h1 {
-                font-size: 1.6rem;
+                font-size: 1.5rem;
+            }
+
+            header p {
+                font-size: 0.9rem;
             }
 
             .example-btns {
                 justify-content: center;
             }
+
+            .CodeMirror {
+                font-size: 12px;
+                min-height: 200px;
+                max-height: 35vh;
+            }
+
+            .output-box {
+                font-size: 12px;
+                padding: 15px;
+                min-height: 150px;
+                max-height: 35vh;
+            }
+
+            .editor-wrapper, .output-wrapper {
+                padding: 12px;
+            }
+
+            .examples {
+                padding: 12px;
+            }
+
+            .info-banner {
+                padding: 12px 15px;
+                margin-bottom: 20px;
+            }
+
+            .info-banner p {
+                font-size: 0.85rem;
+            }
+
+            .status-bar {
+                flex-direction: column;
+                gap: 10px;
+                padding: 12px;
+            }
         }
 
         @media (max-width: 480px) {
             .container {
-                padding: 12px;
+                padding: 10px;
+            }
+
+            header {
+                padding: 15px;
+                box-shadow: 5px 5px 0 #000;
+            }
+
+            header h1 {
+                font-size: 1.2rem;
+                letter-spacing: 1px;
+            }
+
+            .glass-card {
+                box-shadow: 5px 5px 0 #000;
             }
 
             .control-group {
-                padding: 5px 8px;
+                padding: 4px 8px;
             }
 
             .control-group label {
-                font-size: 0.7rem;
+                font-size: 0.65rem;
             }
 
             select {
-                font-size: 0.8rem;
-                padding: 3px 6px;
+                font-size: 0.75rem;
+                padding: 2px 4px;
             }
 
             .btn {
-                padding: 10px 16px;
-                font-size: 0.85rem;
+                padding: 8px 12px;
+                font-size: 0.8rem;
+                box-shadow: 3px 3px 0 #000;
+            }
+
+            .example-btn {
+                padding: 8px 12px;
+                font-size: 0.75rem;
+            }
+
+            .CodeMirror {
+                font-size: 11px;
+                min-height: 180px;
+            }
+
+            .output-box {
+                font-size: 11px;
+                min-height: 120px;
+            }
+
+            .keyboard-hint {
+                display: none;
             }
         }
     </style>
