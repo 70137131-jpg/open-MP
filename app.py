@@ -57,7 +57,27 @@ def compile_code():
             return jsonify({'error': 'Invalid mode. Use "openmp" or "mpi".'}), 400
         if language not in VALID_LANGS:
             return jsonify({'error': 'Invalid language. Use "c" or "cpp".'}), 400
-        
+
+        # Check for language mismatch
+        cpp_indicators = ['iostream', 'fstream', 'sstream', 'cout', 'cin', 'endl',
+                          'std::', 'using namespace', 'class ', 'public:', 'private:',
+                          'protected:', 'template<', 'nullptr', '<vector>', '<string>',
+                          '<map>', '<set>', '<algorithm>', 'new ', 'delete ']
+        c_only_indicators = ['printf', 'scanf', 'stdio.h', 'stdlib.h', 'malloc', 'free(']
+
+        has_cpp_features = any(ind in code for ind in cpp_indicators)
+        has_c_style = any(ind in code for ind in c_only_indicators)
+
+        if language == 'cpp' and has_c_style and not has_cpp_features:
+            return jsonify({
+                'success': False,
+                'error': 'Language Mismatch',
+                'stderr': 'You selected C++ but your code appears to be C (using printf/scanf/stdio.h).\n\n'
+                          'Either:\n'
+                          '1. Switch to C language, or\n'
+                          '2. Use C++ features (iostream, cout, cin, etc.)'
+            }), 400
+
         # Generate unique ID for this compilation
         job_id = str(uuid.uuid4())
         job_dir = TEMP_DIR / job_id
@@ -73,23 +93,14 @@ def compile_code():
         # Select compiler based on mode and language
         if mode == 'mpi':
             compiler = 'mpicxx' if language == 'cpp' else 'mpicc'
-            compile_cmd = [
-                compiler,
-                str(source_file),
-                '-o',
-                str(executable),
-                '-lm'
-            ]
+            compile_cmd = [compiler, str(source_file), '-o', str(executable), '-lm']
+            if language == 'cpp':
+                compile_cmd.extend(['-std=c++17', '-pedantic'])
         else:
             compiler = 'g++' if language == 'cpp' else 'gcc'
-            compile_cmd = [
-                compiler,
-                '-fopenmp',
-                str(source_file),
-                '-o',
-                str(executable),
-                '-lm'
-            ]
+            compile_cmd = [compiler, '-fopenmp', str(source_file), '-o', str(executable), '-lm']
+            if language == 'cpp':
+                compile_cmd.extend(['-std=c++17', '-pedantic'])
         
         compile_result = subprocess.run(
             compile_cmd,
