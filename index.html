@@ -642,7 +642,7 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
                 const result = await response.json();
 
                 if (result.success) {
-                    outputBox.textContent = 'Compilation successful\n\n';
+                    outputBox.textContent = `Compilation successful [${result.compiler || 'unknown'}]\n\n`;
                     outputBox.textContent += '--- OUTPUT ---\n\n';
                     outputBox.textContent += result.output || '(no output)';
 

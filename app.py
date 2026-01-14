@@ -70,7 +70,7 @@ def compile_code():
         with open(source_file, 'w') as f:
             f.write(code)
         
-        # Compile
+        # Select compiler based on mode and language
         if mode == 'mpi':
             compiler = 'mpicxx' if language == 'cpp' else 'mpicc'
             compile_cmd = [
@@ -78,7 +78,7 @@ def compile_code():
                 str(source_file),
                 '-o',
                 str(executable),
-                '-lm'  # Link math library
+                '-lm'
             ]
         else:
             compiler = 'g++' if language == 'cpp' else 'gcc'
@@ -88,7 +88,7 @@ def compile_code():
                 str(source_file),
                 '-o',
                 str(executable),
-                '-lm'  # Link math library
+                '-lm'
             ]
         
         compile_result = subprocess.run(
@@ -141,7 +141,9 @@ def compile_code():
             'success': True,
             'output': run_result.stdout,
             'stderr': run_result.stderr,
-            'returncode': run_result.returncode
+            'returncode': run_result.returncode,
+            'compiler': compiler,
+            'language': language
         })
         
     except subprocess.TimeoutExpired:
