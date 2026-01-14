@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: openmp-compiler
+    env: docker
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /health

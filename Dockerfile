@@ -14,7 +14,7 @@ COPY requirements.txt .
 RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
 # Copy application files
-COPY app.py .
+COPY app.py index.html ./
 
 # Create temp directory for compilations
 RUN mkdir -p /tmp/openmp_compiler && chmod 777 /tmp/openmp_compiler
@@ -24,11 +24,12 @@ EXPOSE 5000
 
 # Set environment variables
 ENV FLASK_APP=app.py
+ENV PORT=5000
 ENV PYTHONUNBUFFERED=1
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 -c "import requests; requests.get('http://localhost:5000/health')" || exit 1
+    CMD ["python3", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://localhost:{os.environ.get('PORT','5000')}/health\").read()"]
 
 # Run the application
 CMD ["python3", "app.py"]
