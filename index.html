@@ -81,52 +81,70 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px 24px;
+            padding: 16px 24px;
             border-bottom: 4px solid #000;
             background: #fff;
         }
 
         .section-header h2 {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 700;
             color: #000;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             text-transform: uppercase;
         }
 
         .section-header h2 .icon {
-            width: 36px;
-            height: 36px;
+            width: 32px;
+            height: 32px;
             display: flex;
             align-items: center;
             justify-content: center;
             background: #ff6b6b;
             border: 3px solid #000;
-            font-size: 16px;
+            font-size: 14px;
+        }
+
+        /* Toolbar for controls */
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 14px 24px;
+            background: #f0f0f0;
+            border-bottom: 4px solid #000;
+            align-items: center;
         }
 
         .controls {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .control-group {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             background: #fff;
-            padding: 8px 14px;
+            padding: 6px 12px;
             border: 3px solid #000;
         }
 
         .control-group label {
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             font-weight: 700;
             color: #000;
             text-transform: uppercase;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-left: auto;
         }
 
         select {
@@ -171,8 +189,9 @@
         }
 
         .btn-primary {
-            background: #ff6b6b;
-            color: #000;
+            background: #22c55e;
+            color: #fff;
+            min-width: 100px;
         }
 
         .btn-primary:disabled {
@@ -400,21 +419,60 @@
             }
         }
 
-        @media (max-width: 640px) {
-            .section-header {
+        @media (max-width: 768px) {
+            .toolbar {
                 flex-direction: column;
-                gap: 16px;
-                align-items: flex-start;
+                align-items: stretch;
             }
 
             .controls {
-                width: 100%;
-                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .action-buttons {
+                margin-left: 0;
+                justify-content: center;
             }
 
             .btn {
                 flex: 1;
                 justify-content: center;
+            }
+
+            header {
+                padding: 25px;
+            }
+
+            header h1 {
+                font-size: 1.6rem;
+            }
+
+            .example-btns {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 12px;
+            }
+
+            .control-group {
+                padding: 5px 8px;
+            }
+
+            .control-group label {
+                font-size: 0.7rem;
+            }
+
+            select {
+                font-size: 0.8rem;
+                padding: 3px 6px;
+            }
+
+            .btn {
+                padding: 10px 16px;
+                font-size: 0.85rem;
             }
         }
     </style>
@@ -441,9 +499,11 @@
                         <span class="icon">&#128221;</span>
                         Code Editor
                     </h2>
+                </div>
+                <div class="toolbar">
                     <div class="controls">
                         <div class="control-group">
-                            <label>Language</label>
+                            <label>Lang</label>
                             <select id="languageSelect">
                                 <option value="c" selected>C</option>
                                 <option value="cpp">C++</option>
@@ -466,6 +526,8 @@
                                 <option value="16">16</option>
                             </select>
                         </div>
+                    </div>
+                    <div class="action-buttons">
                         <button id="clearBtn" class="btn btn-secondary">Clear</button>
                         <button id="runBtn" class="btn btn-primary">
                             <span>Run</span>
