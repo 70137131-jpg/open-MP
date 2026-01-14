@@ -13,6 +13,8 @@ CORS(app)  # Enable CORS for frontend access
 # Create temporary directory for code compilation
 TEMP_DIR = Path(tempfile.gettempdir()) / "openmp_compiler"
 TEMP_DIR.mkdir(exist_ok=True)
+MAX_WORKERS = 16
+VALID_MODES = {"openmp", "mpi"}
 
 def cleanup_old_files():
     """Clean up files older than 1 hour"""
@@ -37,12 +39,20 @@ def index():
 @app.route('/compile', methods=['POST'])
 def compile_code():
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         code = data.get('code', '')
-        num_threads = data.get('threads', 4)
+        mode = data.get('mode', 'openmp')
+
+        try:
+            worker_count = int(data.get('threads', 4))
+        except (TypeError, ValueError):
+            worker_count = 4
+        worker_count = max(1, min(worker_count, MAX_WORKERS))
         
         if not code:
             return jsonify({'error': 'No code provided'}), 400
+        if mode not in VALID_MODES:
+            return jsonify({'error': 'Invalid mode. Use "openmp" or "mpi".'}), 400
         
         # Generate unique ID for this compilation
         job_id = str(uuid.uuid4())
@@ -56,15 +66,24 @@ def compile_code():
         with open(source_file, 'w') as f:
             f.write(code)
         
-        # Compile with OpenMP
-        compile_cmd = [
-            'gcc',
-            '-fopenmp',
-            str(source_file),
-            '-o',
-            str(executable),
-            '-lm'  # Link math library
-        ]
+        # Compile
+        if mode == 'mpi':
+            compile_cmd = [
+                'mpicc',
+                str(source_file),
+                '-o',
+                str(executable),
+                '-lm'  # Link math library
+            ]
+        else:
+            compile_cmd = [
+                'gcc',
+                '-fopenmp',
+                str(source_file),
+                '-o',
+                str(executable),
+                '-lm'  # Link math library
+            ]
         
         compile_result = subprocess.run(
             compile_cmd,
@@ -85,10 +104,23 @@ def compile_code():
         
         # Run the compiled program
         env = os.environ.copy()
-        env['OMP_NUM_THREADS'] = str(num_threads)
+        if mode == 'mpi':
+            env['OMPI_ALLOW_RUN_AS_ROOT'] = '1'
+            env['OMPI_ALLOW_RUN_AS_ROOT_CONFIRM'] = '1'
+            run_cmd = [
+                'mpirun',
+                '--allow-run-as-root',
+                '--oversubscribe',
+                '-np',
+                str(worker_count),
+                str(executable)
+            ]
+        else:
+            env['OMP_NUM_THREADS'] = str(worker_count)
+            run_cmd = [str(executable)]
         
         run_result = subprocess.run(
-            [str(executable)],
+            run_cmd,
             capture_output=True,
             text=True,
             timeout=5,
@@ -212,6 +244,19 @@ int main() {
     }
     printf("Counter = %d (correct!)\\n", counter);
     return 0;
+}''',
+        'mpi_hello': '''#include <mpi.h>
+#include <stdio.h>
+
+int main(int argc, char **argv) {
+    MPI_Init(&argc, &argv);
+    int rank = 0;
+    int size = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    printf("Hello from rank %d of %d\\n", rank, size);
+    MPI_Finalize();
+    return 0;
 }'''
     }
     return jsonify(examples)
@@ -226,10 +271,18 @@ def health_check():
             text=True,
             timeout=5
         )
+        mpi_result = subprocess.run(
+            ['mpicc', '--version'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
         return jsonify({
             'status': 'ok',
             'gcc_available': result.returncode == 0,
-            'gcc_version': result.stdout.split('\n')[0] if result.returncode == 0 else None
+            'gcc_version': result.stdout.split('\n')[0] if result.returncode == 0 else None,
+            'mpi_available': mpi_result.returncode == 0,
+            'mpi_version': mpi_result.stdout.split('\n')[0] if mpi_result.returncode == 0 else None
         })
     except Exception as e:
         return jsonify({

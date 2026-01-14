@@ -443,7 +443,14 @@
                     </h2>
                     <div class="controls">
                         <div class="control-group">
-                            <label>Threads</label>
+                            <label>Mode</label>
+                            <select id="runMode">
+                                <option value="openmp" selected>OpenMP</option>
+                                <option value="mpi">MPI</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label id="workerLabel">Threads</label>
                             <select id="threadCount">
                                 <option value="1">1</option>
                                 <option value="2">2</option>
@@ -476,10 +483,11 @@ int main() {
                     <div class="examples">
                         <h3>Example Programs</h3>
                         <div class="example-btns">
-                            <button class="example-btn" data-example="hello_world">Hello World</button>
-                            <button class="example-btn" data-example="array_sum">Array Sum</button>
-                            <button class="example-btn" data-example="private_vs_shared">Private vs Shared</button>
-                            <button class="example-btn" data-example="critical_section">Critical Section</button>
+                            <button class="example-btn" data-example="hello_world" data-mode="openmp">Hello World</button>
+                            <button class="example-btn" data-example="array_sum" data-mode="openmp">Array Sum</button>
+                            <button class="example-btn" data-example="private_vs_shared" data-mode="openmp">Private vs Shared</button>
+                            <button class="example-btn" data-example="critical_section" data-mode="openmp">Critical Section</button>
+                            <button class="example-btn" data-example="mpi_hello" data-mode="mpi">MPI Hello</button>
                         </div>
                     </div>
                 </div>
@@ -542,6 +550,12 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
         const statusDot = document.getElementById('statusDot');
         const backendStatus = document.getElementById('backendStatus');
         const threadCount = document.getElementById('threadCount');
+        const runMode = document.getElementById('runMode');
+        const workerLabel = document.getElementById('workerLabel');
+
+        function updateWorkerLabel() {
+            workerLabel.textContent = runMode.value === 'mpi' ? 'Processes' : 'Threads';
+        }
 
         // Check backend health
         async function checkBackend() {
@@ -549,7 +563,8 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
                 const response = await fetch(`${API_URL}/health`);
                 const data = await response.json();
                 if (data.status === 'ok' && data.gcc_available) {
-                    backendStatus.textContent = 'Online';
+                    const mpiStatus = data.mpi_available ? ' + MPI' : '';
+                    backendStatus.textContent = `Online${mpiStatus}`;
                     statusDot.classList.add('online');
                     statusDot.classList.remove('offline');
                 } else {
@@ -573,7 +588,10 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
                 document.querySelectorAll('.example-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const exampleName = btn.dataset.example;
+                        const exampleMode = btn.dataset.mode || 'openmp';
                         if (examples[exampleName]) {
+                            runMode.value = exampleMode;
+                            updateWorkerLabel();
                             editor.setValue(examples[exampleName]);
                             outputBox.textContent = 'Example loaded. Click "Run" to execute.';
                             outputBox.className = 'output-box';
@@ -589,6 +607,7 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
         async function runCode() {
             const code = editor.getValue();
             const threads = threadCount.value;
+            const mode = runMode.value;
 
             if (!code.trim()) {
                 outputBox.textContent = 'Error: Please write some code first.';
@@ -608,7 +627,7 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ code, threads: parseInt(threads) })
+                    body: JSON.stringify({ code, threads: parseInt(threads, 10), mode })
                 });
 
                 const result = await response.json();
@@ -658,6 +677,7 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
         // Event listeners
         runBtn.addEventListener('click', runCode);
         clearBtn.addEventListener('click', clearCode);
+        runMode.addEventListener('change', updateWorkerLabel);
 
         // Keyboard shortcut: Ctrl/Cmd + Enter to run
         editor.setOption('extraKeys', {
@@ -666,6 +686,7 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
         });
 
         // Initialize
+        updateWorkerLabel();
         checkBackend();
         loadExamples();
         setInterval(checkBackend, 30000);

@@ -4,6 +4,8 @@ FROM gcc:latest
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
+    openmpi-bin \
+    libopenmpi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

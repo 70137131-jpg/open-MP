@@ -522,3 +522,17 @@ Made with ❤️ for the OpenMP community
  #   o p e n - M P  
  #   o p e n - M P  
  
+## MPI Support
+
+This project can also run basic MPI C programs (single-node only).
+
+### Requirements
+- OpenMPI runtime (`mpicc`, `mpirun`)
+
+### Usage
+- Select "MPI" in the UI and choose the process count.
+- The backend compiles with `mpicc` and runs `mpirun -np <N>`.
+
+### Notes
+- Single-node only; no multi-host clusters.
+- Keep process counts low to avoid resource exhaustion.
