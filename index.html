@@ -488,13 +488,19 @@ int main() {
 }</textarea>
 
                     <div class="examples">
-                        <h3>Example Programs</h3>
+                        <h3>C Examples</h3>
                         <div class="example-btns">
-                            <button class="example-btn" data-example="hello_world" data-mode="openmp">Hello World</button>
-                            <button class="example-btn" data-example="array_sum" data-mode="openmp">Array Sum</button>
-                            <button class="example-btn" data-example="private_vs_shared" data-mode="openmp">Private vs Shared</button>
-                            <button class="example-btn" data-example="critical_section" data-mode="openmp">Critical Section</button>
-                            <button class="example-btn" data-example="mpi_hello" data-mode="mpi">MPI Hello</button>
+                            <button class="example-btn" data-example="hello_world" data-mode="openmp" data-lang="c">Hello World</button>
+                            <button class="example-btn" data-example="array_sum" data-mode="openmp" data-lang="c">Array Sum</button>
+                            <button class="example-btn" data-example="private_vs_shared" data-mode="openmp" data-lang="c">Private vs Shared</button>
+                            <button class="example-btn" data-example="critical_section" data-mode="openmp" data-lang="c">Critical Section</button>
+                            <button class="example-btn" data-example="mpi_hello" data-mode="mpi" data-lang="c">MPI Hello</button>
+                        </div>
+                        <h3 style="margin-top: 14px;">C++ Examples</h3>
+                        <div class="example-btns">
+                            <button class="example-btn" data-example="cpp_hello" data-mode="openmp" data-lang="cpp">C++ Hello</button>
+                            <button class="example-btn" data-example="cpp_vector" data-mode="openmp" data-lang="cpp">C++ Vector Sum</button>
+                            <button class="example-btn" data-example="mpi_cpp_hello" data-mode="mpi" data-lang="cpp">MPI C++ Hello</button>
                         </div>
                     </div>
                 </div>
@@ -597,11 +603,13 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
                     btn.addEventListener('click', () => {
                         const exampleName = btn.dataset.example;
                         const exampleMode = btn.dataset.mode || 'openmp';
+                        const exampleLang = btn.dataset.lang || 'c';
                         if (examples[exampleName]) {
                             runMode.value = exampleMode;
+                            languageSelect.value = exampleLang;
                             updateWorkerLabel();
                             editor.setValue(examples[exampleName]);
-                            outputBox.textContent = 'Example loaded. Click "Run" to execute.';
+                            outputBox.textContent = `Example loaded (${exampleLang.toUpperCase()}). Click "Run" to execute.`;
                             outputBox.className = 'output-box';
                         }
                     });

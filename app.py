@@ -279,6 +279,54 @@ int main(int argc, char **argv) {
     printf("Hello from rank %d of %d\\n", rank, size);
     MPI_Finalize();
     return 0;
+}''',
+        'cpp_hello': '''#include <iostream>
+#include <omp.h>
+
+int main() {
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        int total_threads = omp_get_num_threads();
+        #pragma omp critical
+        std::cout << "Hello from thread " << thread_id << " of " << total_threads << std::endl;
+    }
+    return 0;
+}''',
+        'cpp_vector': '''#include <iostream>
+#include <vector>
+#include <omp.h>
+
+int main() {
+    std::vector<int> arr(1000);
+    long long sum = 0;
+
+    // Initialize array
+    for (int i = 0; i < 1000; i++) {
+        arr[i] = i + 1;
+    }
+
+    // Parallel sum using reduction
+    #pragma omp parallel for reduction(+:sum)
+    for (int i = 0; i < 1000; i++) {
+        sum += arr[i];
+    }
+
+    std::cout << "Sum of 1 to 1000 = " << sum << std::endl;
+    std::cout << "Expected: " << (1000 * 1001) / 2 << std::endl;
+    return 0;
+}''',
+        'mpi_cpp_hello': '''#include <mpi.h>
+#include <iostream>
+
+int main(int argc, char **argv) {
+    MPI_Init(&argc, &argv);
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    std::cout << "Hello from rank " << rank << " of " << size << std::endl;
+    MPI_Finalize();
+    return 0;
 }'''
     }
     return jsonify(examples)
