@@ -15,6 +15,7 @@ TEMP_DIR = Path(tempfile.gettempdir()) / "openmp_compiler"
 TEMP_DIR.mkdir(exist_ok=True)
 MAX_WORKERS = 16
 VALID_MODES = {"openmp", "mpi"}
+VALID_LANGS = {"c", "cpp"}
 
 def cleanup_old_files():
     """Clean up files older than 1 hour"""
@@ -42,6 +43,7 @@ def compile_code():
         data = request.get_json(silent=True) or {}
         code = data.get('code', '')
         mode = data.get('mode', 'openmp')
+        language = data.get('language', 'c')
 
         try:
             worker_count = int(data.get('threads', 4))
@@ -53,6 +55,8 @@ def compile_code():
             return jsonify({'error': 'No code provided'}), 400
         if mode not in VALID_MODES:
             return jsonify({'error': 'Invalid mode. Use "openmp" or "mpi".'}), 400
+        if language not in VALID_LANGS:
+            return jsonify({'error': 'Invalid language. Use "c" or "cpp".'}), 400
         
         # Generate unique ID for this compilation
         job_id = str(uuid.uuid4())
@@ -60,7 +64,7 @@ def compile_code():
         job_dir.mkdir()
         
         # Write code to file
-        source_file = job_dir / "program.c"
+        source_file = job_dir / ("program.cpp" if language == "cpp" else "program.c")
         executable = job_dir / "program"
         
         with open(source_file, 'w') as f:
@@ -68,16 +72,18 @@ def compile_code():
         
         # Compile
         if mode == 'mpi':
+            compiler = 'mpicxx' if language == 'cpp' else 'mpicc'
             compile_cmd = [
-                'mpicc',
+                compiler,
                 str(source_file),
                 '-o',
                 str(executable),
                 '-lm'  # Link math library
             ]
         else:
+            compiler = 'g++' if language == 'cpp' else 'gcc'
             compile_cmd = [
-                'gcc',
+                compiler,
                 '-fopenmp',
                 str(source_file),
                 '-o',
@@ -277,12 +283,28 @@ def health_check():
             text=True,
             timeout=5
         )
+        gpp_result = subprocess.run(
+            ['g++', '--version'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        mpicxx_result = subprocess.run(
+            ['mpicxx', '--version'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
         return jsonify({
             'status': 'ok',
             'gcc_available': result.returncode == 0,
             'gcc_version': result.stdout.split('\n')[0] if result.returncode == 0 else None,
             'mpi_available': mpi_result.returncode == 0,
-            'mpi_version': mpi_result.stdout.split('\n')[0] if mpi_result.returncode == 0 else None
+            'mpi_version': mpi_result.stdout.split('\n')[0] if mpi_result.returncode == 0 else None,
+            'gpp_available': gpp_result.returncode == 0,
+            'gpp_version': gpp_result.stdout.split('\n')[0] if gpp_result.returncode == 0 else None,
+            'mpicxx_available': mpicxx_result.returncode == 0,
+            'mpicxx_version': mpicxx_result.stdout.split('\n')[0] if mpicxx_result.returncode == 0 else None
         })
     except Exception as e:
         return jsonify({

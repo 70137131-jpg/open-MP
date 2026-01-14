@@ -443,6 +443,13 @@
                     </h2>
                     <div class="controls">
                         <div class="control-group">
+                            <label>Language</label>
+                            <select id="languageSelect">
+                                <option value="c" selected>C</option>
+                                <option value="cpp">C++</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
                             <label>Mode</label>
                             <select id="runMode">
                                 <option value="openmp" selected>OpenMP</option>
@@ -550,6 +557,7 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
         const statusDot = document.getElementById('statusDot');
         const backendStatus = document.getElementById('backendStatus');
         const threadCount = document.getElementById('threadCount');
+        const languageSelect = document.getElementById('languageSelect');
         const runMode = document.getElementById('runMode');
         const workerLabel = document.getElementById('workerLabel');
 
@@ -608,6 +616,7 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
             const code = editor.getValue();
             const threads = threadCount.value;
             const mode = runMode.value;
+            const language = languageSelect.value;
 
             if (!code.trim()) {
                 outputBox.textContent = 'Error: Please write some code first.';
@@ -627,7 +636,7 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ code, threads: parseInt(threads, 10), mode })
+                    body: JSON.stringify({ code, threads: parseInt(threads, 10), mode, language })
                 });
 
                 const result = await response.json();

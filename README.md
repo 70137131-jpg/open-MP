@@ -536,3 +536,15 @@ This project can also run basic MPI C programs (single-node only).
 ### Notes
 - Single-node only; no multi-host clusters.
 - Keep process counts low to avoid resource exhaustion.
+
+## C++ Support
+
+You can compile and run C++ programs in both OpenMP and MPI modes.
+
+### Usage
+- Select "C++" in the Language dropdown.
+- Write standard C++ (C++11+ recommended).
+
+### Notes
+- The backend uses `g++` for OpenMP and `mpicxx` for MPI.
+- If a C example fails in C++, switch the language back to C.
