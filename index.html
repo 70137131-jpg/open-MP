@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenMP Online Compiler</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: #d1d5db;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+
+        /* Neo-brutalist Header */
+        header {
+            background: #ffde59;
+            border: 4px solid #000;
+            padding: 40px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 8px 8px 0 #000;
+        }
+
+        header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #000;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            color: #000;
+            font-weight: 500;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            min-height: 650px;
+        }
+
+        /* Neo-brutalist Cards */
+        .glass-card {
+            background: #fff;
+            border: 4px solid #000;
+            box-shadow: 8px 8px 0 #000;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .editor-section {
+            background: #a8e6cf;
+        }
+
+        .output-section {
+            background: #ffd3b6;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 4px solid #000;
+            background: #fff;
+        }
+
+        .section-header h2 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-transform: uppercase;
+        }
+
+        .section-header h2 .icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ff6b6b;
+            border: 3px solid #000;
+            font-size: 16px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #fff;
+            padding: 8px 14px;
+            border: 3px solid #000;
+        }
+
+        .control-group label {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #000;
+            text-transform: uppercase;
+        }
+
+        select {
+            padding: 4px 8px;
+            border: 2px solid #000;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            background: #ffde59;
+            color: #000;
+            font-family: inherit;
+        }
+
+        select:focus {
+            outline: 3px solid #000;
+            outline-offset: 2px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: 3px solid #000;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 700;
+            font-family: inherit;
+            text-transform: uppercase;
+            transition: transform 0.1s, box-shadow 0.1s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 4px 4px 0 #000;
+        }
+
+        .btn:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 6px 6px 0 #000;
+        }
+
+        .btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0 #000;
+        }
+
+        .btn-primary {
+            background: #ff6b6b;
+            color: #000;
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: 4px 4px 0 #000;
+        }
+
+        .btn-secondary {
+            background: #fff;
+            color: #000;
+        }
+
+        .editor-wrapper {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .CodeMirror {
+            height: 100% !important;
+            min-height: 450px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            border: 3px solid #000;
+            box-shadow: 4px 4px 0 #000;
+        }
+
+        .CodeMirror-gutters {
+            border-right: 3px solid #000;
+        }
+
+        .output-wrapper {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .output-box {
+            flex: 1;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            overflow-y: auto;
+            min-height: 450px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.7;
+            border: 3px solid #000;
+            box-shadow: 4px 4px 0 #000;
+        }
+
+        .output-box.error {
+            border-left: 8px solid #ff6b6b;
+        }
+
+        .output-box.success {
+            border-left: 8px solid #a8e6cf;
+        }
+
+        /* Examples section */
+        .examples {
+            margin-top: 20px;
+            padding: 20px;
+            background: #fff;
+            border: 3px solid #000;
+        }
+
+        .examples h3 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #000;
+            margin-bottom: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .example-btns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .example-btn {
+            padding: 10px 16px;
+            background: #dfe6e9;
+            border: 3px solid #000;
+            color: #000;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 700;
+            font-family: inherit;
+            text-transform: uppercase;
+            transition: transform 0.1s, box-shadow 0.1s;
+            box-shadow: 3px 3px 0 #000;
+        }
+
+        .example-btn:hover {
+            background: #74b9ff;
+            transform: translate(-2px, -2px);
+            box-shadow: 5px 5px 0 #000;
+        }
+
+        .example-btn:active {
+            transform: translate(1px, 1px);
+            box-shadow: 2px 2px 0 #000;
+        }
+
+        /* Info banner */
+        .info-banner {
+            background: #ffde59;
+            border: 4px solid #000;
+            padding: 18px 24px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            box-shadow: 6px 6px 0 #000;
+        }
+
+        .info-banner .icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .info-banner p {
+            font-size: 0.95rem;
+            color: #000;
+            line-height: 1.5;
+            font-weight: 500;
+        }
+
+        .info-banner strong {
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        /* Loading animation */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid #000;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Status bar */
+        .status-bar {
+            margin-top: 30px;
+            padding: 16px 24px;
+            background: #fff;
+            border: 4px solid #000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            color: #000;
+            box-shadow: 6px 6px 0 #000;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-transform: uppercase;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            background: #dfe6e9;
+            border: 2px solid #000;
+        }
+
+        .status-dot.online {
+            background: #a8e6cf;
+        }
+
+        .status-dot.offline {
+            background: #ff6b6b;
+        }
+
+        .keyboard-hint {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #000;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        kbd {
+            background: #1a1a2e;
+            color: #fff;
+            padding: 6px 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border: 2px solid #000;
+        }
+
+        /* Responsive design */
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            header h1 {
+                font-size: 2rem;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .section-header {
+                flex-direction: column;
+                gap: 16px;
+                align-items: flex-start;
+            }
+
+            .controls {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+
+            .btn {
+                flex: 1;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>OpenMP Online Compiler</h1>
+            <p>Write, compile, and run parallel programs directly in your browser</p>
+        </header>
+
+        <div class="info-banner">
+            <span class="icon">&#9888;</span>
+            <p>
+                <strong>Note:</strong> This compiler executes code on a sandboxed server.
+                Avoid entering sensitive information. Programs have a 30-second execution limit.
+            </p>
+        </div>
+
+        <div class="main-content">
+            <div class="glass-card editor-section">
+                <div class="section-header">
+                    <h2>
+                        <span class="icon">&#128221;</span>
+                        Code Editor
+                    </h2>
+                    <div class="controls">
+                        <div class="control-group">
+                            <label>Threads</label>
+                            <select id="threadCount">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="4" selected>4</option>
+                                <option value="8">8</option>
+                                <option value="16">16</option>
+                            </select>
+                        </div>
+                        <button id="clearBtn" class="btn btn-secondary">Clear</button>
+                        <button id="runBtn" class="btn btn-primary">
+                            <span>Run</span>
+                            <span>&#9654;</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="editor-wrapper">
+                    <textarea id="codeEditor">#include <stdio.h>
+#include <omp.h>
+
+int main() {
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        int total_threads = omp_get_num_threads();
+        printf("Hello from thread %d of %d\n", thread_id, total_threads);
+    }
+    return 0;
+}</textarea>
+
+                    <div class="examples">
+                        <h3>Example Programs</h3>
+                        <div class="example-btns">
+                            <button class="example-btn" data-example="hello_world">Hello World</button>
+                            <button class="example-btn" data-example="array_sum">Array Sum</button>
+                            <button class="example-btn" data-example="private_vs_shared">Private vs Shared</button>
+                            <button class="example-btn" data-example="critical_section">Critical Section</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card output-section">
+                <div class="section-header">
+                    <h2>
+                        <span class="icon">&#128202;</span>
+                        Output
+                    </h2>
+                </div>
+                <div class="output-wrapper">
+                    <div id="output" class="output-box">Ready to compile and run your OpenMP code.
+
+Click "Run" or press Ctrl+Enter to execute your program.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-indicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="status">Ready</span>
+            </div>
+            <div class="keyboard-hint">
+                <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to run
+            </div>
+            <div class="status-indicator">
+                <span>Backend:</span>
+                <span id="backendStatus">Checking...</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
+    <script>
+        const API_URL = 'http://localhost:5000';
+
+        // Initialize CodeMirror
+        const editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
+            mode: 'text/x-csrc',
+            theme: 'dracula',
+            lineNumbers: true,
+            indentUnit: 4,
+            tabSize: 4,
+            indentWithTabs: false,
+            lineWrapping: true,
+            autoCloseBrackets: true,
+            matchBrackets: true
+        });
+
+        const outputBox = document.getElementById('output');
+        const runBtn = document.getElementById('runBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const statusText = document.getElementById('status');
+        const statusDot = document.getElementById('statusDot');
+        const backendStatus = document.getElementById('backendStatus');
+        const threadCount = document.getElementById('threadCount');
+
+        // Check backend health
+        async function checkBackend() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                if (data.status === 'ok' && data.gcc_available) {
+                    backendStatus.textContent = 'Online';
+                    statusDot.classList.add('online');
+                    statusDot.classList.remove('offline');
+                } else {
+                    backendStatus.textContent = 'GCC Unavailable';
+                    statusDot.classList.add('offline');
+                    statusDot.classList.remove('online');
+                }
+            } catch (error) {
+                backendStatus.textContent = 'Offline';
+                statusDot.classList.add('offline');
+                statusDot.classList.remove('online');
+            }
+        }
+
+        // Load examples
+        async function loadExamples() {
+            try {
+                const response = await fetch(`${API_URL}/examples`);
+                const examples = await response.json();
+
+                document.querySelectorAll('.example-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const exampleName = btn.dataset.example;
+                        if (examples[exampleName]) {
+                            editor.setValue(examples[exampleName]);
+                            outputBox.textContent = 'Example loaded. Click "Run" to execute.';
+                            outputBox.className = 'output-box';
+                        }
+                    });
+                });
+            } catch (error) {
+                console.error('Failed to load examples:', error);
+            }
+        }
+
+        // Run code
+        async function runCode() {
+            const code = editor.getValue();
+            const threads = threadCount.value;
+
+            if (!code.trim()) {
+                outputBox.textContent = 'Error: Please write some code first.';
+                outputBox.className = 'output-box error';
+                return;
+            }
+
+            runBtn.disabled = true;
+            runBtn.innerHTML = '<span class="loading"></span><span>Running...</span>';
+            statusText.textContent = 'Compiling...';
+            outputBox.textContent = 'Compiling your OpenMP program...\n';
+            outputBox.className = 'output-box';
+
+            try {
+                const response = await fetch(`${API_URL}/compile`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ code, threads: parseInt(threads) })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    outputBox.textContent = 'Compilation successful\n\n';
+                    outputBox.textContent += '--- OUTPUT ---\n\n';
+                    outputBox.textContent += result.output || '(no output)';
+
+                    if (result.stderr) {
+                        outputBox.textContent += '\n\n--- WARNINGS ---\n\n';
+                        outputBox.textContent += result.stderr;
+                    }
+
+                    outputBox.className = 'output-box success';
+                    statusText.textContent = 'Completed';
+                } else {
+                    outputBox.textContent = `${result.error}\n\n`;
+                    outputBox.textContent += '--- ERROR DETAILS ---\n\n';
+                    outputBox.textContent += result.stderr || result.stdout || 'Unknown error';
+                    outputBox.className = 'output-box error';
+                    statusText.textContent = 'Failed';
+                }
+            } catch (error) {
+                outputBox.textContent = 'Connection Error\n\n';
+                outputBox.textContent += 'Failed to connect to the compiler backend.\n';
+                outputBox.textContent += 'Make sure the server is running on port 5000.\n\n';
+                outputBox.textContent += `Details: ${error.message}`;
+                outputBox.className = 'output-box error';
+                statusText.textContent = 'Connection failed';
+            } finally {
+                runBtn.disabled = false;
+                runBtn.innerHTML = '<span>Run</span><span>&#9654;</span>';
+            }
+        }
+
+        // Clear code
+        function clearCode() {
+            if (confirm('Clear all code?')) {
+                editor.setValue('');
+                outputBox.textContent = 'Code cleared. Ready for new input.';
+                outputBox.className = 'output-box';
+                statusText.textContent = 'Ready';
+            }
+        }
+
+        // Event listeners
+        runBtn.addEventListener('click', runCode);
+        clearBtn.addEventListener('click', clearCode);
+
+        // Keyboard shortcut: Ctrl/Cmd + Enter to run
+        editor.setOption('extraKeys', {
+            'Ctrl-Enter': runCode,
+            'Cmd-Enter': runCode
+        });
+
+        // Initialize
+        checkBackend();
+        loadExamples();
+        setInterval(checkBackend, 30000);
+    </script>
+</body>
+</html>
