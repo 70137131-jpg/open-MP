@@ -2,6 +2,7 @@
   "rewrites": [
     { "source": "/health", "destination": "https://open-mp-mrew.onrender.com/health" },
     { "source": "/examples", "destination": "https://open-mp-mrew.onrender.com/examples" },
-    { "source": "/compile", "destination": "https://open-mp-mrew.onrender.com/compile" }
+    { "source": "/compile", "destination": "https://open-mp-mrew.onrender.com/compile" },
+    { "source": "/socket.io/:path*", "destination": "https://open-mp-mrew.onrender.com/socket.io/:path*" }
   ]
 }

@@ -767,9 +767,15 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
     <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
     <script>
+        // API URL for HTTP requests (uses Vercel proxy if deployed)
         const API_URL = window.location.origin === 'null'
             ? 'http://localhost:5000'
             : window.location.origin;
+
+        // WebSocket URL - must connect directly to backend (Vercel can't proxy WebSocket)
+        const WS_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:5000'
+            : 'https://open-mp-mrew.onrender.com';
 
         // Initialize CodeMirror
         const editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
@@ -823,12 +829,21 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
         function initSocket() {
             if (socket) return;
 
+            // Use API_URL with polling first (works through Vercel proxy)
+            // Falls back to direct WS_URL if needed
             socket = io(API_URL, {
-                transports: ['websocket', 'polling']
+                transports: ['polling'],
+                withCredentials: false,
+                reconnectionAttempts: 2,
+                timeout: 5000
             });
 
             socket.on('connect', () => {
                 console.log('Socket connected');
+            });
+
+            socket.on('connect_error', (err) => {
+                console.log('Socket connection error:', err.message);
             });
 
             socket.on('compiled', (data) => {
