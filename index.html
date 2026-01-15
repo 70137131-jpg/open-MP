@@ -1040,7 +1040,7 @@ int main(int argc, char **argv) {
             });
         }
 
-        // Run code (interactive mode via WebSocket)
+        // Run code - try WebSocket for interactive, fallback to HTTP
         async function runCode() {
             const code = editor.getValue();
             const threads = threadCount.value;
@@ -1059,36 +1059,83 @@ int main(int argc, char **argv) {
             outputBox.textContent = 'Compiling your program...\n';
             outputBox.className = 'output-box';
 
-            // Initialize socket if not already
+            // Try WebSocket for interactive mode
             initSocket();
 
-            // Wait for socket connection
-            if (!socket.connected) {
-                await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => reject(new Error('Socket connection timeout')), 5000);
-                    socket.once('connect', () => {
-                        clearTimeout(timeout);
-                        resolve();
-                    });
-                }).catch((err) => {
-                    outputBox.textContent = 'Connection Error\n\n';
-                    outputBox.textContent += 'Failed to establish WebSocket connection.\n';
-                    outputBox.textContent += `Details: ${err.message}`;
-                    outputBox.className = 'output-box error';
-                    statusText.textContent = 'Connection failed';
-                    runBtn.disabled = false;
-                    runBtn.innerHTML = '<span>Run</span><span>&#9654;</span>';
-                    return;
-                });
+            // Check if socket connects within 2 seconds, otherwise use HTTP fallback
+            let useWebSocket = false;
+            if (socket) {
+                if (socket.connected) {
+                    useWebSocket = true;
+                } else {
+                    try {
+                        await new Promise((resolve, reject) => {
+                            const timeout = setTimeout(() => reject(new Error('timeout')), 2000);
+                            socket.once('connect', () => {
+                                clearTimeout(timeout);
+                                resolve();
+                            });
+                        });
+                        useWebSocket = true;
+                    } catch (e) {
+                        useWebSocket = false;
+                    }
+                }
             }
 
-            // Start interactive execution
-            socket.emit('start_interactive', {
-                code: code,
-                threads: parseInt(threads, 10),
-                mode: mode,
-                language: language
-            });
+            if (useWebSocket) {
+                // Use WebSocket for interactive execution
+                statusText.textContent = 'Compiling (Interactive)...';
+                socket.emit('start_interactive', {
+                    code: code,
+                    threads: parseInt(threads, 10),
+                    mode: mode,
+                    language: language
+                });
+            } else {
+                // Fallback to HTTP (non-interactive)
+                try {
+                    const response = await fetch(`${API_URL}/compile`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ code, threads: parseInt(threads, 10), mode, language })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        outputBox.textContent = `Compilation successful [${result.compiler || 'unknown'}]\n\n`;
+                        outputBox.textContent += '--- OUTPUT ---\n\n';
+                        outputBox.textContent += result.output || '(no output)';
+
+                        if (result.stderr) {
+                            outputBox.textContent += '\n\n--- WARNINGS ---\n\n';
+                            outputBox.textContent += result.stderr;
+                        }
+
+                        outputBox.className = 'output-box success';
+                        statusText.textContent = 'Completed';
+                    } else {
+                        outputBox.textContent = `${result.error}\n\n`;
+                        outputBox.textContent += '--- ERROR DETAILS ---\n\n';
+                        outputBox.textContent += result.stderr || result.stdout || 'Unknown error';
+                        outputBox.className = 'output-box error';
+                        statusText.textContent = 'Failed';
+                    }
+                } catch (error) {
+                    outputBox.textContent = 'Connection Error\n\n';
+                    outputBox.textContent += 'Failed to connect to the compiler backend.\n';
+                    outputBox.textContent += 'Make sure the server is running.\n\n';
+                    outputBox.textContent += `Details: ${error.message}`;
+                    outputBox.className = 'output-box error';
+                    statusText.textContent = 'Connection failed';
+                } finally {
+                    runBtn.disabled = false;
+                    runBtn.innerHTML = '<span>Run</span><span>&#9654;</span>';
+                }
+            }
         }
 
         // Clear code

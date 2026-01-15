@@ -12,7 +12,7 @@ from pathlib import Path
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend access
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Store active processes for interactive sessions
 active_processes = {}
