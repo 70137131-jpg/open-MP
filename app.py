@@ -1,21 +1,14 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
 import subprocess
 import os
 import uuid
 import tempfile
 import shutil
-import threading
-import select
 from pathlib import Path
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend access
-socketio = SocketIO(app, cors_allowed_origins="*")
-
-# Store active processes for interactive sessions
-active_processes = {}
 
 # Create temporary directory for code compilation
 TEMP_DIR = Path(tempfile.gettempdir()) / "openmp_compiler"
@@ -384,187 +377,8 @@ def health_check():
             'error': 'GCC not found - please install MinGW-w64 or GCC'
         }), 200
 
-# WebSocket handlers for interactive execution
-@socketio.on('connect')
-def handle_connect():
-    emit('connected', {'status': 'connected'})
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    sid = request.sid
-    if sid in active_processes:
-        proc_info = active_processes[sid]
-        try:
-            proc_info['process'].terminate()
-            shutil.rmtree(proc_info['job_dir'], ignore_errors=True)
-        except:
-            pass
-        del active_processes[sid]
-
-@socketio.on('start_interactive')
-def handle_start_interactive(data):
-    sid = request.sid
-    code = data.get('code', '')
-    mode = data.get('mode', 'openmp')
-    language = data.get('language', 'c')
-
-    try:
-        worker_count = int(data.get('threads', 4))
-    except (TypeError, ValueError):
-        worker_count = 4
-    worker_count = max(1, min(worker_count, MAX_WORKERS))
-
-    if not code:
-        emit('error', {'message': 'No code provided'})
-        return
-
-    # Create job directory
-    job_id = str(uuid.uuid4())
-    job_dir = TEMP_DIR / job_id
-    job_dir.mkdir()
-
-    # Write code to file
-    source_file = job_dir / ("program.cpp" if language == "cpp" else "program.c")
-    executable = job_dir / "program"
-
-    with open(source_file, 'w') as f:
-        f.write(code)
-
-    # Compile
-    if mode == 'mpi':
-        compiler = 'mpicxx' if language == 'cpp' else 'mpicc'
-        compile_cmd = [compiler, str(source_file), '-o', str(executable), '-lm']
-        if language == 'cpp':
-            compile_cmd.extend(['-std=c++17', '-pedantic'])
-    else:
-        compiler = 'g++' if language == 'cpp' else 'gcc'
-        compile_cmd = [compiler, '-fopenmp', str(source_file), '-o', str(executable), '-lm']
-        if language == 'cpp':
-            compile_cmd.extend(['-std=c++17', '-pedantic'])
-
-    try:
-        compile_result = subprocess.run(
-            compile_cmd,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        if compile_result.returncode != 0:
-            shutil.rmtree(job_dir)
-            emit('compile_error', {
-                'error': 'Compilation Error',
-                'stderr': compile_result.stderr,
-                'stdout': compile_result.stdout
-            })
-            return
-
-        emit('compiled', {'message': f'Compilation successful [{compiler}]'})
-
-        # Run the program interactively
-        env = os.environ.copy()
-        if mode == 'mpi':
-            env['OMPI_ALLOW_RUN_AS_ROOT'] = '1'
-            env['OMPI_ALLOW_RUN_AS_ROOT_CONFIRM'] = '1'
-            run_cmd = [
-                'mpirun',
-                '--allow-run-as-root',
-                '--oversubscribe',
-                '-np',
-                str(worker_count),
-                str(executable)
-            ]
-        else:
-            env['OMP_NUM_THREADS'] = str(worker_count)
-            run_cmd = [str(executable)]
-
-        # Start process with pipes for interactive I/O
-        process = subprocess.Popen(
-            run_cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=env,
-            bufsize=1
-        )
-
-        active_processes[sid] = {
-            'process': process,
-            'job_dir': job_dir
-        }
-
-        # Start output reader thread
-        def read_output():
-            try:
-                while True:
-                    if process.poll() is not None:
-                        # Process ended, read remaining output
-                        remaining_out = process.stdout.read()
-                        remaining_err = process.stderr.read()
-                        if remaining_out:
-                            socketio.emit('output', {'data': remaining_out}, room=sid)
-                        if remaining_err:
-                            socketio.emit('stderr', {'data': remaining_err}, room=sid)
-                        socketio.emit('finished', {'returncode': process.returncode}, room=sid)
-                        break
-
-                    # Read stdout character by character for real-time output
-                    char = process.stdout.read(1)
-                    if char:
-                        socketio.emit('output', {'data': char}, room=sid)
-            except Exception as e:
-                socketio.emit('error', {'message': str(e)}, room=sid)
-            finally:
-                if sid in active_processes:
-                    try:
-                        shutil.rmtree(job_dir, ignore_errors=True)
-                    except:
-                        pass
-                    del active_processes[sid]
-
-        thread = threading.Thread(target=read_output, daemon=True)
-        thread.start()
-
-    except subprocess.TimeoutExpired:
-        shutil.rmtree(job_dir, ignore_errors=True)
-        emit('error', {'message': 'Compilation timeout'})
-    except Exception as e:
-        shutil.rmtree(job_dir, ignore_errors=True)
-        emit('error', {'message': str(e)})
-
-@socketio.on('send_input')
-def handle_send_input(data):
-    sid = request.sid
-    if sid not in active_processes:
-        emit('error', {'message': 'No active process'})
-        return
-
-    input_text = data.get('input', '')
-    process = active_processes[sid]['process']
-
-    try:
-        if process.poll() is None:  # Process still running
-            process.stdin.write(input_text + '\n')
-            process.stdin.flush()
-    except Exception as e:
-        emit('error', {'message': f'Failed to send input: {str(e)}'})
-
-@socketio.on('stop_process')
-def handle_stop_process():
-    sid = request.sid
-    if sid in active_processes:
-        proc_info = active_processes[sid]
-        try:
-            proc_info['process'].terminate()
-            shutil.rmtree(proc_info['job_dir'], ignore_errors=True)
-        except:
-            pass
-        del active_processes[sid]
-        emit('finished', {'returncode': -1, 'message': 'Process terminated by user'})
-
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('FLASK_DEBUG') == '1'
-    socketio.run(app, host='0.0.0.0', port=port, debug=debug, allow_unsafe_werkzeug=True)
+    app.run(host='0.0.0.0', port=port, debug=debug)
 

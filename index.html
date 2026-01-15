@@ -266,72 +266,6 @@
             border-left: 8px solid #a8e6cf;
         }
 
-        .terminal-input-container {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-        }
-
-        .terminal-input {
-            flex: 1;
-            padding: 12px 16px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-            background: #1a1a2e;
-            color: #22c55e;
-            border: 3px solid #000;
-            box-shadow: 4px 4px 0 #000;
-        }
-
-        .terminal-input:focus {
-            outline: none;
-            border-color: #22c55e;
-        }
-
-        .terminal-input::placeholder {
-            color: #666;
-        }
-
-        .terminal-input:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .btn-send {
-            background: #74b9ff;
-            color: #000;
-            padding: 12px 20px;
-        }
-
-        .btn-stop {
-            background: #ff6b6b;
-            color: #fff;
-            padding: 12px 20px;
-        }
-
-        .interactive-indicator {
-            display: inline-block;
-            padding: 4px 8px;
-            background: #22c55e;
-            color: #000;
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            border: 2px solid #000;
-            margin-left: 10px;
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
-        }
-
-        .interactive-indicator.waiting {
-            background: #ffde59;
-            animation: pulse 0.8s infinite;
-        }
-
         /* Examples section */
         .examples {
             margin-top: 10px;
@@ -739,11 +673,6 @@ int main() {
                     <div id="output" class="output-box">Ready to compile and run your OpenMP code.
 
 Click "Run" or press Ctrl+Enter to execute your program.</div>
-                    <div class="terminal-input-container">
-                        <input type="text" id="terminalInput" class="terminal-input" placeholder="Type input here and press Enter..." disabled>
-                        <button id="sendBtn" class="btn btn-send" disabled>Send</button>
-                        <button id="stopBtn" class="btn btn-stop" style="display: none;">Stop</button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -765,17 +694,10 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
-    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
     <script>
-        // API URL for HTTP requests (uses Vercel proxy if deployed)
         const API_URL = window.location.origin === 'null'
             ? 'http://localhost:5000'
             : window.location.origin;
-
-        // WebSocket URL - must connect directly to backend (Vercel can't proxy WebSocket)
-        const WS_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? 'http://localhost:5000'
-            : 'https://open-mp-mrew.onrender.com';
 
         // Initialize CodeMirror
         const editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
@@ -800,132 +722,10 @@ Click "Run" or press Ctrl+Enter to execute your program.</div>
         const languageSelect = document.getElementById('languageSelect');
         const runMode = document.getElementById('runMode');
         const workerLabel = document.getElementById('workerLabel');
-        const terminalInput = document.getElementById('terminalInput');
-        const sendBtn = document.getElementById('sendBtn');
-        const stopBtn = document.getElementById('stopBtn');
-
-        let socket = null;
-        let isInteractiveMode = false;
 
         function updateWorkerLabel() {
             workerLabel.textContent = runMode.value === 'mpi' ? 'Processes' : 'Threads';
         }
-
-        function enableInteractiveInput() {
-            terminalInput.disabled = false;
-            sendBtn.disabled = false;
-            stopBtn.style.display = 'block';
-            terminalInput.focus();
-            isInteractiveMode = true;
-        }
-
-        function disableInteractiveInput() {
-            terminalInput.disabled = true;
-            sendBtn.disabled = true;
-            stopBtn.style.display = 'none';
-            isInteractiveMode = false;
-        }
-
-        function initSocket() {
-            if (socket) return;
-
-            // Use API_URL with polling first (works through Vercel proxy)
-            // Falls back to direct WS_URL if needed
-            socket = io(API_URL, {
-                transports: ['polling'],
-                withCredentials: false,
-                reconnectionAttempts: 2,
-                timeout: 5000
-            });
-
-            socket.on('connect', () => {
-                console.log('Socket connected');
-            });
-
-            socket.on('connect_error', (err) => {
-                console.log('Socket connection error:', err.message);
-            });
-
-            socket.on('compiled', (data) => {
-                outputBox.textContent = data.message + '\n\n--- OUTPUT ---\n';
-                outputBox.className = 'output-box';
-                statusText.textContent = 'Running (Interactive)';
-                enableInteractiveInput();
-            });
-
-            socket.on('output', (data) => {
-                outputBox.textContent += data.data;
-                outputBox.scrollTop = outputBox.scrollHeight;
-            });
-
-            socket.on('stderr', (data) => {
-                outputBox.textContent += '\n--- STDERR ---\n' + data.data;
-                outputBox.scrollTop = outputBox.scrollHeight;
-            });
-
-            socket.on('compile_error', (data) => {
-                outputBox.textContent = `${data.error}\n\n--- ERROR DETAILS ---\n\n${data.stderr || data.stdout || 'Unknown error'}`;
-                outputBox.className = 'output-box error';
-                statusText.textContent = 'Compilation Failed';
-                runBtn.disabled = false;
-                runBtn.innerHTML = '<span>Run</span><span>&#9654;</span>';
-                disableInteractiveInput();
-            });
-
-            socket.on('error', (data) => {
-                outputBox.textContent += `\n\nError: ${data.message}`;
-                outputBox.className = 'output-box error';
-                statusText.textContent = 'Error';
-                runBtn.disabled = false;
-                runBtn.innerHTML = '<span>Run</span><span>&#9654;</span>';
-                disableInteractiveInput();
-            });
-
-            socket.on('finished', (data) => {
-                outputBox.textContent += `\n\n--- Program finished (exit code: ${data.returncode}) ---`;
-                if (data.returncode === 0) {
-                    outputBox.className = 'output-box success';
-                    statusText.textContent = 'Completed';
-                } else {
-                    outputBox.className = 'output-box error';
-                    statusText.textContent = 'Finished with errors';
-                }
-                runBtn.disabled = false;
-                runBtn.innerHTML = '<span>Run</span><span>&#9654;</span>';
-                disableInteractiveInput();
-            });
-
-            socket.on('disconnect', () => {
-                console.log('Socket disconnected');
-                disableInteractiveInput();
-            });
-        }
-
-        function sendInput() {
-            const input = terminalInput.value;
-            if (socket && isInteractiveMode) {
-                socket.emit('send_input', { input: input });
-                outputBox.textContent += input + '\n';
-                outputBox.scrollTop = outputBox.scrollHeight;
-                terminalInput.value = '';
-            }
-        }
-
-        function stopProcess() {
-            if (socket && isInteractiveMode) {
-                socket.emit('stop_process');
-            }
-        }
-
-        // Event listeners for terminal input
-        terminalInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendInput();
-            }
-        });
-
-        sendBtn.addEventListener('click', sendInput);
-        stopBtn.addEventListener('click', stopProcess);
 
         // Check backend health
         async function checkBackend() {
@@ -1055,7 +855,7 @@ int main(int argc, char **argv) {
             });
         }
 
-        // Run code - try WebSocket for interactive, fallback to HTTP
+        // Run code
         async function runCode() {
             const code = editor.getValue();
             const threads = threadCount.value;
@@ -1071,85 +871,49 @@ int main(int argc, char **argv) {
             runBtn.disabled = true;
             runBtn.innerHTML = '<span class="loading"></span><span>Running...</span>';
             statusText.textContent = 'Compiling...';
-            outputBox.textContent = 'Compiling your program...\n';
+            outputBox.textContent = 'Compiling your OpenMP program...\n';
             outputBox.className = 'output-box';
 
-            // Try WebSocket for interactive mode
-            initSocket();
-
-            // Check if socket connects within 2 seconds, otherwise use HTTP fallback
-            let useWebSocket = false;
-            if (socket) {
-                if (socket.connected) {
-                    useWebSocket = true;
-                } else {
-                    try {
-                        await new Promise((resolve, reject) => {
-                            const timeout = setTimeout(() => reject(new Error('timeout')), 2000);
-                            socket.once('connect', () => {
-                                clearTimeout(timeout);
-                                resolve();
-                            });
-                        });
-                        useWebSocket = true;
-                    } catch (e) {
-                        useWebSocket = false;
-                    }
-                }
-            }
-
-            if (useWebSocket) {
-                // Use WebSocket for interactive execution
-                statusText.textContent = 'Compiling (Interactive)...';
-                socket.emit('start_interactive', {
-                    code: code,
-                    threads: parseInt(threads, 10),
-                    mode: mode,
-                    language: language
+            try {
+                const response = await fetch(`${API_URL}/compile`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ code, threads: parseInt(threads, 10), mode, language })
                 });
-            } else {
-                // Fallback to HTTP (non-interactive)
-                try {
-                    const response = await fetch(`${API_URL}/compile`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ code, threads: parseInt(threads, 10), mode, language })
-                    });
 
-                    const result = await response.json();
+                const result = await response.json();
 
-                    if (result.success) {
-                        outputBox.textContent = `Compilation successful [${result.compiler || 'unknown'}]\n\n`;
-                        outputBox.textContent += '--- OUTPUT ---\n\n';
-                        outputBox.textContent += result.output || '(no output)';
+                if (result.success) {
+                    outputBox.textContent = `Compilation successful [${result.compiler || 'unknown'}]\n\n`;
+                    outputBox.textContent += '--- OUTPUT ---\n\n';
+                    outputBox.textContent += result.output || '(no output)';
 
-                        if (result.stderr) {
-                            outputBox.textContent += '\n\n--- WARNINGS ---\n\n';
-                            outputBox.textContent += result.stderr;
-                        }
-
-                        outputBox.className = 'output-box success';
-                        statusText.textContent = 'Completed';
-                    } else {
-                        outputBox.textContent = `${result.error}\n\n`;
-                        outputBox.textContent += '--- ERROR DETAILS ---\n\n';
-                        outputBox.textContent += result.stderr || result.stdout || 'Unknown error';
-                        outputBox.className = 'output-box error';
-                        statusText.textContent = 'Failed';
+                    if (result.stderr) {
+                        outputBox.textContent += '\n\n--- WARNINGS ---\n\n';
+                        outputBox.textContent += result.stderr;
                     }
-                } catch (error) {
-                    outputBox.textContent = 'Connection Error\n\n';
-                    outputBox.textContent += 'Failed to connect to the compiler backend.\n';
-                    outputBox.textContent += 'Make sure the server is running.\n\n';
-                    outputBox.textContent += `Details: ${error.message}`;
+
+                    outputBox.className = 'output-box success';
+                    statusText.textContent = 'Completed';
+                } else {
+                    outputBox.textContent = `${result.error}\n\n`;
+                    outputBox.textContent += '--- ERROR DETAILS ---\n\n';
+                    outputBox.textContent += result.stderr || result.stdout || 'Unknown error';
                     outputBox.className = 'output-box error';
-                    statusText.textContent = 'Connection failed';
-                } finally {
-                    runBtn.disabled = false;
-                    runBtn.innerHTML = '<span>Run</span><span>&#9654;</span>';
+                    statusText.textContent = 'Failed';
                 }
+            } catch (error) {
+                outputBox.textContent = 'Connection Error\n\n';
+                outputBox.textContent += 'Failed to connect to the compiler backend.\n';
+                outputBox.textContent += 'Make sure the server is running on port 5000.\n\n';
+                outputBox.textContent += `Details: ${error.message}`;
+                outputBox.className = 'output-box error';
+                statusText.textContent = 'Connection failed';
+            } finally {
+                runBtn.disabled = false;
+                runBtn.innerHTML = '<span>Run</span><span>&#9654;</span>';
             }
         }
 
