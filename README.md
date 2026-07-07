@@ -2,6 +2,8 @@
 
 A web-based compiler for OpenMP programs with a beautiful code editor interface.
 
+**Live demo:** [open-mp-theta.vercel.app](https://open-mp-theta.vercel.app/)
+
 ## Features ✨
 
 - 🎨 Beautiful, modern UI with syntax highlighting
@@ -11,6 +13,8 @@ A web-based compiler for OpenMP programs with a beautiful code editor interface.
 - 🎯 Error highlighting and detailed output
 - ⌨️ Keyboard shortcuts (Ctrl/Cmd + Enter to run)
 - 📱 Responsive design
+- 🧩 MPI support (single-node)
+- ➕ C++ support (OpenMP and MPI modes)
 
 ## Architecture
 
@@ -31,12 +35,12 @@ A web-based compiler for OpenMP programs with a beautiful code editor interface.
 
 ## Prerequisites 📋
 
-### Required:
+### Required
 - Python 3.8 or higher
 - GCC compiler with OpenMP support
 - pip (Python package manager)
 
-### Optional (for production):
+### Optional (for production)
 - Docker (recommended for security)
 - nginx (for reverse proxy)
 
@@ -71,7 +75,6 @@ int main() { return 0; }' | gcc -fopenmp -xc - -o test && ./test
 
 #### Step 3: Clone/Download the Project
 ```bash
-# Create project directory
 mkdir openmp-compiler
 cd openmp-compiler
 
@@ -90,15 +93,12 @@ pip install -r requirements.txt
 ```bash
 python app.py
 ```
-
 The backend will start on `http://localhost:5000`
 
 #### Step 6: Open the Frontend
-Simply open `index.html` in your browser, or serve it with:
+Open `index.html` directly in your browser, or serve it with:
 ```bash
-# Python 3
 python -m http.server 8000
-
 # Then open: http://localhost:8000
 ```
 
@@ -110,26 +110,21 @@ Docker provides isolation and security for running untrusted code.
 
 #### Step 1: Create Dockerfile
 
-Create `Dockerfile`:
 ```dockerfile
 FROM gcc:latest
 
 # Install Python
 RUN apt-get update && apt-get install -y python3 python3-pip
 
-# Set working directory
 WORKDIR /app
 
-# Copy project files
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY app.py .
 
-# Expose port
 EXPOSE 5000
 
-# Run the application
 CMD ["python3", "app.py"]
 ```
 
@@ -148,7 +143,7 @@ services:
     environment:
       - FLASK_ENV=production
     restart: unless-stopped
-    
+
   frontend:
     image: nginx:alpine
     ports:
@@ -177,7 +172,7 @@ Access the application at `http://localhost:8080`
 ## Security Considerations ⚠️
 
 ### Current Implementation (Development Only)
-The current setup is suitable for:
+Suitable for:
 - ✅ Learning and education
 - ✅ Personal use
 - ✅ Controlled environments
@@ -187,13 +182,13 @@ The current setup is suitable for:
 - ❌ Untrusted user input
 - ❌ Multi-tenant systems
 
-### Security Risks:
-1. **Code Execution**: Users can run arbitrary C code
-2. **Resource Exhaustion**: Infinite loops, memory leaks
-3. **File System Access**: Programs can read/write files
-4. **Network Access**: Programs can make network calls
+### Security Risks
+1. **Code Execution** — users can run arbitrary C/C++ code
+2. **Resource Exhaustion** — infinite loops, memory leaks
+3. **File System Access** — programs can read/write files
+4. **Network Access** — programs can make network calls
 
-### Hardening for Production:
+### Hardening for Production
 
 #### 1. Use Docker with Security Limits
 ```yaml
@@ -223,7 +218,6 @@ pip install flask-login flask-bcrypt
 pip install flask-limiter
 ```
 
-Add to `app.py`:
 ```python
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -236,13 +230,12 @@ limiter = Limiter(
 ```
 
 #### 4. Use Sandboxing
-- **gVisor**: Container runtime sandbox
-- **Firejail**: Linux namespace sandbox
-- **seccomp**: Syscall filtering
+- **gVisor** — container runtime sandbox
+- **Firejail** — Linux namespace sandbox
+- **seccomp** — syscall filtering
 
 #### 5. Code Analysis Before Execution
 ```python
-# Block dangerous patterns
 BLACKLIST = [
     'system(',
     'exec(',
@@ -264,23 +257,40 @@ def is_code_safe(code):
 
 ## Usage Guide 📖
 
-### Basic Workflow:
+### Basic Workflow
+1. **Write Code** — use the code editor (left panel)
+2. **Select Language/Mode** — C or C++, OpenMP or MPI
+3. **Select Threads/Processes** — choose thread or process count (1-16)
+4. **Run** — click "Run Code" or press Ctrl+Enter
+5. **View Output** — see results in the output panel (right)
 
-1. **Write Code**: Use the code editor (left panel)
-2. **Select Threads**: Choose thread count (1-16)
-3. **Run**: Click "Run Code" or press Ctrl+Enter
-4. **View Output**: See results in the output panel (right)
-
-### Keyboard Shortcuts:
+### Keyboard Shortcuts
 - `Ctrl/Cmd + Enter`: Run code
 - `Tab`: Indent
 - `Ctrl/Cmd + /`: Comment line
 
-### Example Programs Available:
-1. **Hello World** - Basic parallel region
-2. **Array Sum** - Reduction clause demo
-3. **Private vs Shared** - Variable scoping
-4. **Critical Section** - Race condition prevention
+### Example Programs Available
+1. **Hello World** — basic parallel region
+2. **Array Sum** — reduction clause demo
+3. **Private vs Shared** — variable scoping
+4. **Critical Section** — race condition prevention
+
+### MPI Support
+Basic MPI C/C++ programs are supported, single-node only.
+
+- **Requirements:** OpenMPI runtime (`mpicc`, `mpirun`)
+- Select "MPI" in the UI and choose the process count.
+- The backend compiles with `mpicc` and runs `mpirun -np <N>`.
+- Single-node only; no multi-host clusters.
+- Keep process counts low to avoid resource exhaustion.
+
+### C++ Support
+Compile and run C++ programs in both OpenMP and MPI modes.
+
+- Select "C++" in the Language dropdown.
+- Write standard C++ (C++11+ recommended).
+- The backend uses `g++` for OpenMP and `mpicxx` for MPI.
+- If a C example fails in C++, switch the language back to C.
 
 ---
 
@@ -289,8 +299,8 @@ def is_code_safe(code):
 ### Backend won't start
 ```bash
 # Check if port 5000 is in use
-lsof -i :5000  # Linux/Mac
-netstat -ano | findstr :5000  # Windows
+lsof -i :5000          # Linux/Mac
+netstat -ano | findstr :5000   # Windows
 
 # Kill the process if needed
 kill -9 <PID>
@@ -298,7 +308,6 @@ kill -9 <PID>
 
 ### GCC not found
 ```bash
-# Verify GCC installation
 which gcc
 gcc --version
 
@@ -308,7 +317,6 @@ sudo apt install gcc
 
 ### OpenMP not working
 ```bash
-# Test OpenMP
 echo 'int main() {}' | gcc -fopenmp -xc - -o test
 
 # If it fails, reinstall GCC
@@ -316,12 +324,12 @@ sudo apt install --reinstall gcc
 ```
 
 ### CORS errors
-- Make sure Flask CORS is installed
-- Check browser console for details
-- Ensure API_URL in index.html matches backend
+- Make sure Flask-CORS is installed
+- Check the browser console for details
+- Ensure `API_URL` in `index.html` matches the backend URL
 
 ### Compilation timeout
-- Reduce thread count
+- Reduce thread/process count
 - Simplify code
 - Check for infinite loops
 
@@ -329,10 +337,8 @@ sudo apt install --reinstall gcc
 
 ## API Documentation 📚
 
-### Endpoints:
-
-#### POST /compile
-Compile and execute OpenMP code.
+### POST `/compile`
+Compile and execute OpenMP/MPI code.
 
 **Request:**
 ```json
@@ -361,7 +367,7 @@ Compile and execute OpenMP code.
 }
 ```
 
-#### GET /examples
+### GET `/examples`
 Get example programs.
 
 **Response:**
@@ -372,7 +378,7 @@ Get example programs.
 }
 ```
 
-#### GET /health
+### GET `/health`
 Check backend status.
 
 **Response:**
@@ -432,10 +438,8 @@ python app.py
 
 ### Option 2: Cloud Deployment (Heroku)
 ```bash
-# Create Procfile
 echo "web: python app.py" > Procfile
 
-# Deploy
 heroku create openmp-compiler
 git push heroku main
 ```
@@ -454,28 +458,10 @@ gunicorn -w 4 -b 0.0.0.0:5000 app:app
 
 ## Performance Tips 🚀
 
-1. **Limit Thread Count**: Don't allow more threads than CPU cores
-2. **Set Resource Limits**: Use ulimit or Docker limits
-3. **Cache Compiled Binaries**: For repeated executions
-4. **Use Async**: Switch to async Flask for better concurrency
-
----
-
-## License 📄
-
-This project is open source and available under the MIT License.
-
----
-
-## Contributing 🤝
-
-Contributions are welcome! Areas for improvement:
-- Better error messages
-- More example programs
-- Support for C++ and Fortran
-- Interactive debugging
-- Performance profiling
-- Code autocomplete
+1. **Limit Thread Count** — don't allow more threads than CPU cores
+2. **Set Resource Limits** — use ulimit or Docker limits
+3. **Cache Compiled Binaries** — for repeated executions
+4. **Use Async** — switch to async Flask for better concurrency
 
 ---
 
@@ -485,10 +471,10 @@ Contributions are welcome! Areas for improvement:
 A: Not as-is. Implement proper security (Docker, sandboxing, auth) first.
 
 **Q: What's the maximum execution time?**
-A: Default is 5 seconds. Modify timeout in app.py.
+A: Default is 5 seconds. Modify the timeout in `app.py`.
 
 **Q: Can I compile other languages?**
-A: Yes! Modify app.py to support C++, Fortran, etc.
+A: Currently C and C++ are supported. Fortran support could be added.
 
 **Q: How do I debug my code?**
 A: Add printf statements. Future versions may include GDB integration.
@@ -498,53 +484,36 @@ A: Currently no. Add localStorage or database support.
 
 ---
 
-## Support 💬
+## Resources
 
-For issues or questions:
-1. Check troubleshooting section
-2. Review error messages carefully
-3. Test with example programs first
+- **Live demo:** [open-mp-theta.vercel.app](https://open-mp-theta.vercel.app/)
+
+---
+
+## Contributing 🤝
+
+Contributions are welcome! Areas for improvement:
+- Better error messages
+- More example programs
+- Fortran support
+- Interactive debugging
+- Performance profiling
+- Code autocomplete
 
 ---
 
 ## Credits 🙏
 
-- **CodeMirror**: Code editor
-- **Flask**: Backend framework
-- **GCC**: Compiler with OpenMP support
+- **CodeMirror** — code editor
+- **Flask** — backend framework
+- **GCC** — compiler with OpenMP support
+
+---
+
+## License 📄
+
+This project is open source and available under the MIT License.
 
 ---
 
 Made with ❤️ for the OpenMP community
-#   o p e n _ M P  
- #   o p e n _ M P  
- #   o p e n - M P  
- #   o p e n - M P  
- #   o p e n - M P  
- 
-## MPI Support
-
-This project can also run basic MPI C programs (single-node only).
-
-### Requirements
-- OpenMPI runtime (`mpicc`, `mpirun`)
-
-### Usage
-- Select "MPI" in the UI and choose the process count.
-- The backend compiles with `mpicc` and runs `mpirun -np <N>`.
-
-### Notes
-- Single-node only; no multi-host clusters.
-- Keep process counts low to avoid resource exhaustion.
-
-## C++ Support
-
-You can compile and run C++ programs in both OpenMP and MPI modes.
-
-### Usage
-- Select "C++" in the Language dropdown.
-- Write standard C++ (C++11+ recommended).
-
-### Notes
-- The backend uses `g++` for OpenMP and `mpicxx` for MPI.
-- If a C example fails in C++, switch the language back to C.
