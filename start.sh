@@ -1,94 +1,68 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Development bootstrap: check the toolchain, install dependencies into a
+# virtualenv, then serve the app on http://localhost:5000.
+#
+# For anything resembling production use `docker compose up --build` instead -
+# this script runs the compiler on your own machine with no container boundary.
 
-# OpenMP Compiler Quick Start Script
-# This script sets up and runs the OpenMP online compiler
+set -euo pipefail
 
-set -e  # Exit on error
+cd "$(dirname "$0")"
 
-echo "🔧 OpenMP Online Compiler - Quick Start"
-echo "========================================"
-echo ""
+VENV="${VENV:-.venv}"
+PORT="${PORT:-5000}"
 
-# Check if Python is installed
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 is not installed. Please install Python 3.8 or higher."
-    exit 1
-fi
+info() { printf '  %s\n' "$*"; }
+fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-echo "✓ Python found: $(python3 --version)"
+echo "OpenMP / MPI online compiler - development setup"
+echo "================================================"
 
-# Check if GCC is installed
-if ! command -v gcc &> /dev/null; then
-    echo "❌ GCC is not installed."
-    echo "Install it with:"
-    echo "  Ubuntu/Debian: sudo apt install gcc"
-    echo "  macOS: brew install gcc"
-    exit 1
-fi
+command -v python3 >/dev/null || fail "python3 not found (need 3.10 or newer)"
+info "python:  $(python3 --version)"
 
-echo "✓ GCC found: $(gcc --version | head -n1)"
+command -v gcc >/dev/null || fail "gcc not found. Ubuntu/Debian: sudo apt install gcc"
+info "gcc:     $(gcc --version | head -n1)"
 
-# Check OpenMP support
-echo ""
-echo "Testing OpenMP support..."
-cat > /tmp/test_openmp.c << 'EOF'
-#include <omp.h>
-#include <stdio.h>
-int main() {
-    #pragma omp parallel
-    {
-        printf("Thread %d\n", omp_get_thread_num());
-    }
-    return 0;
-}
-EOF
-
-if gcc -fopenmp /tmp/test_openmp.c -o /tmp/test_openmp 2>/dev/null; then
-    echo "✓ OpenMP is supported!"
-    /tmp/test_openmp > /dev/null 2>&1
-    rm -f /tmp/test_openmp /tmp/test_openmp.c
+if command -v g++ >/dev/null; then
+    info "g++:     $(g++ --version | head -n1)"
 else
-    echo "❌ OpenMP is not supported by your GCC installation."
-    echo "Please install a version of GCC with OpenMP support."
-    exit 1
+    info "g++:     not found - C++ support will be unavailable"
 fi
 
-# Install Python dependencies
-echo ""
-echo "Installing Python dependencies..."
-if [ -f "requirements.txt" ]; then
-    pip3 install -q -r requirements.txt
-    echo "✓ Dependencies installed"
+if command -v mpicc >/dev/null && command -v mpirun >/dev/null; then
+    info "mpi:     $(mpicc --version | head -n1)"
 else
-    echo "❌ requirements.txt not found!"
-    exit 1
+    info "mpi:     not found - MPI mode will be unavailable"
+    info "         Ubuntu/Debian: sudo apt install openmpi-bin libopenmpi-dev"
 fi
 
-# Check if files exist
-echo ""
-echo "Checking project files..."
-if [ ! -f "app.py" ]; then
-    echo "❌ app.py not found!"
-    exit 1
+# OpenMP is a compiler feature rather than a package, so probe for it directly.
+probe="$(mktemp -d)"
+trap 'rm -rf "$probe"' EXIT
+printf '#include <omp.h>\nint main(void){ return omp_get_max_threads() > 0 ? 0 : 1; }\n' > "$probe/probe.c"
+if gcc -fopenmp "$probe/probe.c" -o "$probe/probe" 2>/dev/null && "$probe/probe"; then
+    info "openmp:  supported"
+else
+    fail "gcc cannot compile OpenMP code (-fopenmp). Install a GCC build with OpenMP support."
 fi
-echo "✓ app.py found"
 
-if [ ! -f "index.html" ]; then
-    echo "❌ index.html not found!"
-    exit 1
+echo
+echo "Installing dependencies into $VENV"
+[ -d "$VENV" ] || python3 -m venv "$VENV"
+"$VENV/bin/pip" install --quiet --upgrade pip
+"$VENV/bin/pip" install --quiet -r requirements.txt
+info "dependencies installed"
+
+if [ "$(id -u)" -eq 0 ]; then
+    echo
+    echo "WARNING: running as root. The kernel does not enforce RLIMIT_NPROC for"
+    echo "         root, so a program that forks cannot be reliably contained"
+    echo "         unless an unprivileged 'sandbox' user exists to drop to."
+    echo "         Prefer a normal user, or use 'docker compose up' instead."
 fi
-echo "✓ index.html found"
 
-# Start the backend
-echo ""
-echo "========================================"
-echo "🚀 Starting the backend server..."
-echo "========================================"
-echo ""
-echo "Backend will run on: http://localhost:5000"
-echo "Open index.html in your browser to use the compiler"
-echo ""
-echo "Press Ctrl+C to stop the server"
-echo ""
-
-python3 app.py
+echo
+echo "Serving on http://localhost:$PORT   (Ctrl+C to stop)"
+echo
+exec "$VENV/bin/python" app.py

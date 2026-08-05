@@ -1,0 +1,82 @@
+[
+  {
+    "id": "hello_world",
+    "title": "Hello World",
+    "file": "hello_world.c",
+    "language": "c",
+    "mode": "openmp",
+    "description": "Every thread in a parallel region prints its own id."
+  },
+  {
+    "id": "array_sum",
+    "title": "Array Sum",
+    "file": "array_sum.c",
+    "language": "c",
+    "mode": "openmp",
+    "description": "Summing an array with reduction(+:sum) instead of a lock."
+  },
+  {
+    "id": "private_vs_shared",
+    "title": "Private vs Shared",
+    "file": "private_vs_shared.c",
+    "language": "c",
+    "mode": "openmp",
+    "description": "What the private and shared data-sharing clauses actually do."
+  },
+  {
+    "id": "critical_section",
+    "title": "Critical Section",
+    "file": "critical_section.c",
+    "language": "c",
+    "mode": "openmp",
+    "description": "The same counter loop with and without a data race."
+  },
+  {
+    "id": "schedule_comparison",
+    "title": "Static vs Dynamic",
+    "file": "schedule_comparison.c",
+    "language": "c",
+    "mode": "openmp",
+    "description": "Timing an unbalanced loop under static and dynamic scheduling."
+  },
+  {
+    "id": "mpi_hello",
+    "title": "MPI Hello",
+    "file": "mpi_hello.c",
+    "language": "c",
+    "mode": "mpi",
+    "description": "Rank and communicator size from MPI_COMM_WORLD."
+  },
+  {
+    "id": "mpi_ring",
+    "title": "MPI Token Ring",
+    "file": "mpi_ring.c",
+    "language": "c",
+    "mode": "mpi",
+    "description": "Blocking MPI_Send / MPI_Recv passing a token around a ring."
+  },
+  {
+    "id": "cpp_hello",
+    "title": "C++ Hello",
+    "file": "cpp_hello.cpp",
+    "language": "cpp",
+    "mode": "openmp",
+    "description": "Keeping std::cout output intact across threads."
+  },
+  {
+    "id": "cpp_vector",
+    "title": "C++ Vector Sum",
+    "file": "cpp_vector.cpp",
+    "language": "cpp",
+    "mode": "openmp",
+    "description": "A reduction over std::vector."
+  },
+  {
+    "id": "mpi_cpp_hello",
+    "title": "MPI C++ Hello",
+    "file": "mpi_cpp_hello.cpp",
+    "language": "cpp",
+    "mode": "mpi",
+    "description": "Calling the MPI C API from C++."
+  }
+]

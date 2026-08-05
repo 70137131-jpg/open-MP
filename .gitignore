@@ -1,21 +1,28 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
 *.egg-info/
-dist/
+.Python
 build/
+dist/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+ENV/
+
+# Test and lint caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Flask
 instance/
 .webassets-cache
 
-# IDE
+# Editors
 .vscode/
 .idea/
 *.swp
@@ -29,15 +36,17 @@ Thumbs.db
 # Logs
 *.log
 
-# Temporary files
+# Scratch
 *.tmp
 tmp/
 temp/
-/tmp/
 
-# Compiled files
+# Compiled artefacts (the examples/ sources are tracked, their binaries are not)
 *.o
 *.out
 a.out
-test
+examples/*.bin
 program
+
+# Archives - the repository is the source of truth, not a zip of it
+*.zip

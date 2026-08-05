@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install the parallel toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc g++ openmpi-bin libopenmpi-dev
+
+      - name: Install Python dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Check the generated examples bundle is current
+        run: python scripts/build_examples.py --check
+
+      # The runner is a normal user, so RLIMIT_NPROC is enforced and the
+      # containment tests (including the fork-bomb one) run for real.
+      - name: Test
+        run: pytest -q
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t openmp-compiler:ci .
+
+      - name: Boot it and exercise the API
+        run: |
+          docker run -d --name openmp-ci \
+            --cap-drop ALL \
+            --cap-add SETUID --cap-add SETGID --cap-add CHOWN \
+            --cap-add DAC_OVERRIDE --cap-add KILL \
+            --security-opt no-new-privileges:true \
+            --pids-limit 512 \
+            -p 5000:5000 openmp-compiler:ci
+
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:5000/health > /dev/null; then break; fi
+            sleep 2
+          done
+
+          echo "--- health ---"
+          curl -fsS http://localhost:5000/health
+
+          echo "--- openmp run ---"
+          curl -fsS -X POST http://localhost:5000/compile \
+            -H 'Content-Type: application/json' \
+            -d '{"code":"#include <stdio.h>\n#include <omp.h>\nint main(void){#pragma omp parallel\n{ }\nprintf(\"ok\\n\"); return 0;}","threads":2}' \
+            | tee /tmp/out.json
+          grep -q '"success": true' /tmp/out.json
+
+          echo "--- programs must not run as root ---"
+          curl -fsS -X POST http://localhost:5000/compile \
+            -H 'Content-Type: application/json' \
+            -d '{"code":"#include <stdio.h>\n#include <unistd.h>\nint main(void){printf(\"%d\\n\", getuid()); return 0;}"}' \
+            | tee /tmp/uid.json
+          grep -q '"output": "0' /tmp/uid.json && { echo "FAIL: program ran as root"; exit 1; }
+          echo "ok: compiled programs run unprivileged"
+
+      - name: Container logs
+        if: always()
+        run: docker logs openmp-ci || true
+
+      - name: Clean up
+        if: always()
+        run: docker rm -f openmp-ci || true

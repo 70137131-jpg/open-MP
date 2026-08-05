@@ -1,519 +1,240 @@
-# OpenMP Online Compiler 🔧
+# OpenMP & MPI Online Compiler
 
-A web-based compiler for OpenMP programs with a beautiful code editor interface.
+Write, compile and run parallel **C and C++** programs from the browser — OpenMP
+threads or MPI ranks, with the output streamed back.
 
 **Live demo:** [open-mp-theta.vercel.app](https://open-mp-theta.vercel.app/)
 
-## Features ✨
+---
 
-- 🎨 Beautiful, modern UI with syntax highlighting
-- 🚀 Real-time OpenMP code compilation and execution
-- 🧵 Adjustable thread count (1-16 threads)
-- 📚 Pre-loaded example programs
-- 🎯 Error highlighting and detailed output
-- ⌨️ Keyboard shortcuts (Ctrl/Cmd + Enter to run)
-- 📱 Responsive design
-- 🧩 MPI support (single-node)
-- ➕ C++ support (OpenMP and MPI modes)
+## What it does
 
-## Architecture
+| | |
+|---|---|
+| **Languages** | C (`gcc` / `mpicc`) and C++17 (`g++` / `mpicxx`) |
+| **Modes** | OpenMP (1–16 threads) and MPI (1–16 ranks, single node) |
+| **Editor** | CodeMirror with C/C++ highlighting, bracket matching, `Ctrl`+`Enter` to run |
+| **Examples** | 10 annotated programs, compiled and tested in CI |
+| **UI** | Light/dark themes, responsive, code and settings persisted locally |
+| **Resilience** | Falls back to a plain textarea if the CodeMirror CDN is unreachable |
 
-```
-┌─────────────────┐         ┌─────────────────┐
-│   Frontend      │  HTTP   │   Flask API     │
-│  (HTML/JS)      │◄───────►│   (Python)      │
-│  - CodeMirror   │         │   - Compile     │
-│  - Monaco Theme │         │   - Execute     │
-└─────────────────┘         └─────────────────┘
-                                     │
-                                     ▼
-                            ┌─────────────────┐
-                            │  GCC + OpenMP   │
-                            │  Compiler       │
-                            └─────────────────┘
-```
+---
 
-## Prerequisites 📋
+## Quick start
 
-### Required
-- Python 3.8 or higher
-- GCC compiler with OpenMP support
-- pip (Python package manager)
+### Docker (recommended)
 
-### Optional (for production)
-- Docker (recommended for security)
-- nginx (for reverse proxy)
-
-## Installation Guide 🚀
-
-### Method 1: Direct Installation (Development)
-
-#### Step 1: Install System Dependencies
-
-**Ubuntu/Debian:**
 ```bash
-sudo apt update
-sudo apt install -y gcc python3 python3-pip
+docker compose up --build
 ```
 
-**macOS:**
+Open <http://localhost:8080>. nginx serves the page and proxies `/compile`,
+`/health` and `/examples` to the backend.
+
+### Local development
+
 ```bash
-brew install gcc python3
+./start.sh
 ```
 
-**Windows:**
-- Install MinGW-w64 with GCC
-- Install Python from python.org
-- Add both to PATH
+Checks your toolchain, creates `.venv`, installs dependencies and serves
+<http://localhost:5000>. On Debian/Ubuntu you will want:
 
-#### Step 2: Verify OpenMP Support
 ```bash
-gcc --version
-echo '#include <omp.h>
-int main() { return 0; }' | gcc -fopenmp -xc - -o test && ./test
+sudo apt install gcc g++ openmpi-bin libopenmpi-dev
 ```
 
-#### Step 3: Clone/Download the Project
-```bash
-mkdir openmp-compiler
-cd openmp-compiler
+### Tests
 
-# Copy all files:
-# - app.py
-# - index.html
-# - requirements.txt
-```
-
-#### Step 4: Install Python Dependencies
 ```bash
-pip install -r requirements.txt
-```
-
-#### Step 5: Run the Backend
-```bash
-python app.py
-```
-The backend will start on `http://localhost:5000`
-
-#### Step 6: Open the Frontend
-Open `index.html` directly in your browser, or serve it with:
-```bash
-python -m http.server 8000
-# Then open: http://localhost:8000
+pip install -r requirements-dev.txt
+pytest -q          # compiles and runs real programs; MPI tests skip if absent
+ruff check .
 ```
 
 ---
 
-### Method 2: Docker Installation (Production - RECOMMENDED)
+## How the sandbox works
 
-Docker provides isolation and security for running untrusted code.
+The service compiles and executes code that anyone can submit. That is
+inherently dangerous, so every child process is constrained on five axes:
 
-#### Step 1: Create Dockerfile
+| Axis | Mechanism | Default |
+|---|---|---|
+| Wall clock | parent kills the process **group** | 10s run, 30s MPI, 15s compile |
+| CPU time | `RLIMIT_CPU` | 10s |
+| Memory | `RLIMIT_AS` | 512 MB (2 GB floor for MPI) |
+| Output / files | `RLIMIT_FSIZE` + truncation on read | 8 MB, 256 KB returned |
+| Processes | `RLIMIT_NPROC` + privilege drop | 256 |
 
-```dockerfile
-FROM gcc:latest
+Plus: a private per-job directory that is always removed, a scrubbed
+environment (the server's variables are not inherited), compiler diagnostics
+with server paths stripped out, per-IP rate limiting and a concurrency gate.
 
-# Install Python
-RUN apt-get update && apt-get install -y python3 python3-pip
+> **Rate limiting is per worker process.** The in-app limiter keeps its counters
+> in memory, so with `WEB_CONCURRENCY=4` a client gets up to `4 x
+> OPENMP_RATE_LIMIT` requests per window. It is a backstop; the nginx
+> `limit_req` zone in `nginx.conf` is what enforces one shared limit in front of
+> all the workers. A multi-host deployment needs a shared store such as Redis.
 
-WORKDIR /app
+### The part that is easy to get wrong
 
-COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+**`RLIMIT_NPROC` is not enforced for root.** A process holding
+`CAP_SYS_RESOURCE` — which root has — is exempt from the process-count limit.
+A fork bomb started by a root-owned server therefore ignores the cap entirely,
+and no amount of `killpg` in userspace reliably wins the race against it.
 
-COPY app.py .
+So the executor **drops each compiled program to an unprivileged user**
+(`OPENMP_SANDBOX_USER`, default `sandbox`) before `exec`. This is what makes
+the limits real, and it also stops the compiler reading root-only files through
+tricks like `#include "/etc/shadow"`. The Docker image runs as root *only* so it
+can perform that drop, and `docker-compose.yml` removes every capability except
+the five needed for it (`SETUID`, `SETGID`, `CHOWN`, `DAC_OVERRIDE`, `KILL`).
 
-EXPOSE 5000
+Teardown matters too: killing a forking program takes `SIGSTOP` on the whole
+process group *before* `SIGKILL`, because a stopped process cannot fork, and
+repeating until `/proc` shows no live members of the group. A plain `SIGKILL`
+loop loses the race. `tests/test_executor.py` runs an actual fork bomb and
+asserts nothing leaks.
 
-CMD ["python3", "app.py"]
-```
+### What this still is not
 
-#### Step 2: Create docker-compose.yml
-
-```yaml
-version: '3.8'
-
-services:
-  backend:
-    build: .
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./app.py:/app/app.py
-    environment:
-      - FLASK_ENV=production
-    restart: unless-stopped
-
-  frontend:
-    image: nginx:alpine
-    ports:
-      - "8080:80"
-    volumes:
-      - ./index.html:/usr/share/nginx/html/index.html:ro
-    restart: unless-stopped
-```
-
-#### Step 3: Run with Docker
-```bash
-# Build and start
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop
-docker-compose down
-```
-
-Access the application at `http://localhost:8080`
+A container boundary is required, not optional. The sandbox makes that boundary
+survivable; it does not replace it. Do not run `start.sh` as root on a machine
+you care about, and do not expose the backend directly to the internet without
+the rate limiting, the pids limit and a read-only root filesystem that
+`docker-compose.yml` sets up.
 
 ---
 
-## Security Considerations ⚠️
+## Configuration
 
-### Current Implementation (Development Only)
-Suitable for:
-- ✅ Learning and education
-- ✅ Personal use
-- ✅ Controlled environments
+Everything is environment driven; defaults live in `backend/config.py`.
 
-**NOT suitable for:**
-- ❌ Public-facing production
-- ❌ Untrusted user input
-- ❌ Multi-tenant systems
-
-### Security Risks
-1. **Code Execution** — users can run arbitrary C/C++ code
-2. **Resource Exhaustion** — infinite loops, memory leaks
-3. **File System Access** — programs can read/write files
-4. **Network Access** — programs can make network calls
-
-### Hardening for Production
-
-#### 1. Use Docker with Security Limits
-```yaml
-services:
-  backend:
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: true
-    tmpfs:
-      - /tmp
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-```
-
-#### 2. Add User Authentication
-```bash
-pip install flask-login flask-bcrypt
-```
-
-#### 3. Implement Rate Limiting
-```bash
-pip install flask-limiter
-```
-
-```python
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    default_limits=["10 per minute"]
-)
-```
-
-#### 4. Use Sandboxing
-- **gVisor** — container runtime sandbox
-- **Firejail** — Linux namespace sandbox
-- **seccomp** — syscall filtering
-
-#### 5. Code Analysis Before Execution
-```python
-BLACKLIST = [
-    'system(',
-    'exec(',
-    'fork(',
-    'socket(',
-    'open(',
-    'fopen(',
-    '__asm__'
-]
-
-def is_code_safe(code):
-    for pattern in BLACKLIST:
-        if pattern in code:
-            return False, f"Dangerous pattern detected: {pattern}"
-    return True, "OK"
-```
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` | `5000` | Listen port |
+| `OPENMP_WORKDIR` | `$TMPDIR/openmp_compiler` | Job staging root (must be world-traversable) |
+| `OPENMP_SANDBOX_USER` | `sandbox` | User to run compiled programs as; empty disables the drop |
+| `OPENMP_MAX_WORKERS` | `16` | Ceiling on threads / ranks |
+| `OPENMP_MAX_CODE_BYTES` | `65536` | Largest accepted source |
+| `OPENMP_COMPILE_TIMEOUT` | `15` | Compile wall clock (s) |
+| `OPENMP_RUN_TIMEOUT` | `10` | OpenMP run wall clock (s) |
+| `OPENMP_MPI_RUN_TIMEOUT` | `30` | MPI run wall clock (s) |
+| `OPENMP_CPU_SECONDS` | `10` | `RLIMIT_CPU` for user programs |
+| `OPENMP_ADDRESS_SPACE_BYTES` | `536870912` | `RLIMIT_AS` (MPI gets ≥ 2 GB) |
+| `OPENMP_FILE_SIZE_BYTES` | `8388608` | `RLIMIT_FSIZE` (MPI gets ≥ 8 MB) |
+| `OPENMP_MAX_PROCESSES` | `256` | `RLIMIT_NPROC` |
+| `OPENMP_MAX_OUTPUT_BYTES` | `262144` | Output returned before truncation |
+| `OPENMP_RATE_LIMIT` | `20` | Requests per window per client **per worker** (see note) |
+| `OPENMP_RATE_LIMIT_WINDOW` | `60` | Rate-limit window (s) |
+| `OPENMP_MAX_CONCURRENT_JOBS` | `4` | Simultaneous compilations before 503 |
+| `OPENMP_CORS_ORIGINS` | `*` | Allowed origins |
+| `OPENMP_LOG_LEVEL` | `INFO` | Log verbosity |
+| `WEB_CONCURRENCY` | `min(4, 2·cpus+1)` | gunicorn workers |
 
 ---
 
-## Usage Guide 📖
+## API
 
-### Basic Workflow
-1. **Write Code** — use the code editor (left panel)
-2. **Select Language/Mode** — C or C++, OpenMP or MPI
-3. **Select Threads/Processes** — choose thread or process count (1-16)
-4. **Run** — click "Run Code" or press Ctrl+Enter
-5. **View Output** — see results in the output panel (right)
+### `POST /compile`
 
-### Keyboard Shortcuts
-- `Ctrl/Cmd + Enter`: Run code
-- `Tab`: Indent
-- `Ctrl/Cmd + /`: Comment line
-
-### Example Programs Available
-1. **Hello World** — basic parallel region
-2. **Array Sum** — reduction clause demo
-3. **Private vs Shared** — variable scoping
-4. **Critical Section** — race condition prevention
-
-### MPI Support
-Basic MPI C/C++ programs are supported, single-node only.
-
-- **Requirements:** OpenMPI runtime (`mpicc`, `mpirun`)
-- Select "MPI" in the UI and choose the process count.
-- The backend compiles with `mpicc` and runs `mpirun -np <N>`.
-- Single-node only; no multi-host clusters.
-- Keep process counts low to avoid resource exhaustion.
-
-### C++ Support
-Compile and run C++ programs in both OpenMP and MPI modes.
-
-- Select "C++" in the Language dropdown.
-- Write standard C++ (C++11+ recommended).
-- The backend uses `g++` for OpenMP and `mpicxx` for MPI.
-- If a C example fails in C++, switch the language back to C.
-
----
-
-## Troubleshooting 🔧
-
-### Backend won't start
-```bash
-# Check if port 5000 is in use
-lsof -i :5000          # Linux/Mac
-netstat -ano | findstr :5000   # Windows
-
-# Kill the process if needed
-kill -9 <PID>
-```
-
-### GCC not found
-```bash
-which gcc
-gcc --version
-
-# Install if missing (Ubuntu)
-sudo apt install gcc
-```
-
-### OpenMP not working
-```bash
-echo 'int main() {}' | gcc -fopenmp -xc - -o test
-
-# If it fails, reinstall GCC
-sudo apt install --reinstall gcc
-```
-
-### CORS errors
-- Make sure Flask-CORS is installed
-- Check the browser console for details
-- Ensure `API_URL` in `index.html` matches the backend URL
-
-### Compilation timeout
-- Reduce thread/process count
-- Simplify code
-- Check for infinite loops
-
----
-
-## API Documentation 📚
-
-### POST `/compile`
-Compile and execute OpenMP/MPI code.
-
-**Request:**
 ```json
-{
-  "code": "#include <stdio.h>\n...",
-  "threads": 4
-}
+{ "code": "#include <stdio.h>\n...", "language": "c", "mode": "openmp", "threads": 4 }
 ```
 
-**Response (Success):**
+`language` is `c` or `cpp`; `mode` is `openmp` or `mpi`; `threads` is clamped to
+`[1, OPENMP_MAX_WORKERS]`.
+
 ```json
 {
   "success": true,
-  "output": "Hello from thread 0...",
+  "stage": "run",
+  "output": "Hello from thread 0 of 4\n",
   "stderr": "",
-  "returncode": 0
+  "returncode": 0,
+  "compiler": "gcc",
+  "language": "c",
+  "mode": "openmp",
+  "workers": 4,
+  "compileMs": 118,
+  "runMs": 7,
+  "truncated": false
 }
 ```
 
-**Response (Error):**
+`success` means *the job ran to completion*. A program that exits non-zero or
+segfaults still returns `success: true` with the real `returncode` — that is
+the program's result. `success: false` means compilation failed or the sandbox
+intervened, and `error` says which (`Compilation error`, `Execution timeout`,
+`Resource limit exceeded`, `Rate limit exceeded`, `Server busy`,
+`Toolchain unavailable`). Failures may also carry a `hint` with a one-line
+diagnosis, e.g. selecting OpenMP mode for a program that calls `MPI_Init`.
+
+### `GET /examples`
+
 ```json
-{
-  "success": false,
-  "error": "Compilation Error",
-  "stderr": "program.c:5:2: error: ..."
-}
+{ "examples": [ { "id": "hello_world", "title": "Hello World",
+                  "language": "c", "mode": "openmp",
+                  "description": "...", "source": "#include <stdio.h>..." } ] }
 ```
 
-### GET `/examples`
-Get example programs.
+### `GET /health`
 
-**Response:**
-```json
-{
-  "hello_world": "#include <stdio.h>...",
-  "array_sum": "..."
-}
-```
-
-### GET `/health`
-Check backend status.
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "gcc_available": true,
-  "gcc_version": "gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0"
-}
-```
+Reports which compilers are present and the limits currently in force. Cached
+for `OPENMP_HEALTH_CACHE` seconds because the frontend polls it.
 
 ---
 
-## Customization 🎨
+## Layout
 
-### Change Theme
-Edit `index.html`:
-```javascript
-const editor = CodeMirror.fromTextArea(..., {
-    theme: 'monokai',  // Try: dracula, material, solarized
-    ...
-});
+```
+app.py                  WSGI entry point
+gunicorn.conf.py        production server settings
+backend/
+  __init__.py           application factory
+  config.py             every tunable, resolved from the environment
+  executor.py           the sandbox: compile, run, constrain, clean up
+  routes.py             HTTP surface
+  examples.py           example catalogue loader
+  ratelimit.py          sliding-window limiter and concurrency gate
+examples/               real .c/.cpp sources + manifest.json
+static/css, static/js   frontend (no build step)
+scripts/build_examples.py   regenerates static/js/examples.data.js
+tests/                  pytest suite; compiles and runs real programs
 ```
 
-### Add More Examples
-Edit `app.py`:
-```python
-examples = {
-    'my_example': '''#include <stdio.h>
-// Your code here
-'''
-}
-```
+### Frontend notes
 
-### Modify Timeout Limits
-Edit `app.py`:
-```python
-# Compilation timeout
-compile_result = subprocess.run(..., timeout=10)  # seconds
+There is no build step: `index.html` loads `static/css/styles.css` and
+`static/js/app.js` directly, so the page also works served as plain static
+files with the API on another origin.
 
-# Execution timeout
-run_result = subprocess.run(..., timeout=5)  # seconds
-```
+CodeMirror comes from cdnjs with subresource-integrity hashes. If it cannot be
+loaded the editor degrades to a plain textarea (tab-indent included) and says
+so in the output pane — a dead CDN costs syntax highlighting, not the page.
 
----
+### Adding an example
 
-## Deployment Options 🌐
+1. Drop the source in `examples/` (the filename stem becomes its id).
+2. Add an entry to `examples/manifest.json`.
+3. `python3 scripts/build_examples.py` to refresh the bundled copy.
 
-### Option 1: Local Network
-```bash
-# Run backend on all interfaces
-python app.py
-
-# Access from other devices:
-# http://<your-ip>:5000
-```
-
-### Option 2: Cloud Deployment (Heroku)
-```bash
-echo "web: python app.py" > Procfile
-
-heroku create openmp-compiler
-git push heroku main
-```
-
-### Option 3: VPS Deployment
-```bash
-# 1. Set up nginx reverse proxy
-# 2. Use gunicorn for production
-pip install gunicorn
-
-# 3. Run with gunicorn
-gunicorn -w 4 -b 0.0.0.0:5000 app:app
-```
+`pytest` then compiles and runs it like any other example, and CI fails if the
+generated bundle is stale.
 
 ---
 
-## Performance Tips 🚀
+## Deployment
 
-1. **Limit Thread Count** — don't allow more threads than CPU cores
-2. **Set Resource Limits** — use ulimit or Docker limits
-3. **Cache Compiled Binaries** — for repeated executions
-4. **Use Async** — switch to async Flask for better concurrency
-
----
-
-## FAQ ❓
-
-**Q: Can I use this for production?**
-A: Not as-is. Implement proper security (Docker, sandboxing, auth) first.
-
-**Q: What's the maximum execution time?**
-A: Default is 5 seconds. Modify the timeout in `app.py`.
-
-**Q: Can I compile other languages?**
-A: Currently C and C++ are supported. Fortran support could be added.
-
-**Q: How do I debug my code?**
-A: Add printf statements. Future versions may include GDB integration.
-
-**Q: Can I save my code?**
-A: Currently no. Add localStorage or database support.
+* **Render** — `render.yaml` builds the Dockerfile and health-checks `/health`.
+* **Vercel** — serves the static page and rewrites the three API paths to the
+  backend; edit the URLs in `vercel.json` to point at your own deployment.
+* **Anywhere else** — `docker compose up`, or `gunicorn --config
+  gunicorn.conf.py app:app` behind a reverse proxy.
 
 ---
 
-## Resources
+## License
 
-- **Live demo:** [open-mp-theta.vercel.app](https://open-mp-theta.vercel.app/)
-
----
-
-## Contributing 🤝
-
-Contributions are welcome! Areas for improvement:
-- Better error messages
-- More example programs
-- Fortran support
-- Interactive debugging
-- Performance profiling
-- Code autocomplete
-
----
-
-## Credits 🙏
-
-- **CodeMirror** — code editor
-- **Flask** — backend framework
-- **GCC** — compiler with OpenMP support
-
----
-
-## License 📄
-
-This project is open source and available under the MIT License.
-
----
-
-Made with ❤️ for the OpenMP community
+MIT.

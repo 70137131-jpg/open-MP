@@ -1,7 +1,20 @@
 services:
   - type: web
     name: openmp-compiler
-    env: docker
+    runtime: docker
     dockerfilePath: ./Dockerfile
     autoDeploy: true
     healthCheckPath: /health
+    envVars:
+      - key: OPENMP_SANDBOX_USER
+        value: sandbox
+      - key: OPENMP_MAX_WORKERS
+        value: "8"
+      - key: OPENMP_RATE_LIMIT
+        value: "20"
+      - key: OPENMP_MAX_CONCURRENT_JOBS
+        value: "2"
+      - key: OPENMP_LOG_LEVEL
+        value: info
+      - key: WEB_CONCURRENCY
+        value: "2"
